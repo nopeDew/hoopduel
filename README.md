@@ -12,4 +12,4 @@ It was inspired by Basketball Stars, but driven by the desire to play the game w
 6. Both players click **I'm ready**.
 
 ## Run globally
-1. [Hoop Duel]Go to hoopduel.onrender.com
+1. [Hoop Duel](hoopduel.onrender.com)
