@@ -1,4 +1,4 @@
-# Hoop Duel — online 1v1 basketball prototype
+# Hoop Duel — online 1v1 basketball
 
 A small browser-based, original 1v1 basketball game with private rooms and 6-character join codes.
 It was inspired by Basketball Stars, but driven by the desire to play the game wirelessly.
