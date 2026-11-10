@@ -11,19 +11,22 @@ const io = new Server(server);
 app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
-
 const rooms = new Map();
 
 const COURT = {
   width: 900,
   height: 500,
   floor: 390,
-  ballFloor: 362
+  ballFloor: 373,
+  leftHoop: 80,
+  rightHoop: 820,
+  hoopY: 205
 };
 
-const PLAYER_SPEED = 260;
-const JUMP_POWER = 410;
-const GRAVITY = 980;
+const PLAYER_SPEED = 280;
+const JUMP_POWER = 440;
+const GRAVITY = 1100;
+const BALL_GRAVITY = 900;
 
 const makeCode = () =>
   crypto.randomBytes(3).toString("hex").toUpperCase();
@@ -47,8 +50,11 @@ function createPlayer(socket, name, side) {
     score: 0,
     ready: false,
     input: {},
-    didShoot: false,
-    lastStealAt: 0
+    previousInput: {},
+    lastStealAt: 0,
+    action: "idle",
+    actionUntil: 0,
+    dunking: false
   };
 }
 
@@ -59,7 +65,9 @@ function createBall() {
     vx: 0,
     vy: 0,
     owner: null,
-    pickupLockoutUntil: 0
+    pickupLockoutUntil: 0,
+    dunking: false,
+    dunkTimer: 0
   };
 }
 
@@ -83,25 +91,27 @@ function emitState(room) {
       side: p.side,
       x: p.x,
       y: p.y,
-      score: p.score
+      vx: p.vx,
+      vy: p.vy,
+      score: p.score,
+      action: p.action
     })),
     ball: {
       x: room.ball.x,
       y: room.ball.y,
       owner: room.ball.owner
         ? room.players.find(p => p.id === room.ball.owner)?.side || null
-        : null
+        : null,
+      dunking: room.ball.dunking
     }
   });
 }
 
-// ROOMS AND CONNECTIONS
+// ROOMS
 
 io.on("connection", socket => {
-
   socket.on("createRoom", ({ name } = {}) => {
     let code;
-
     do {
       code = makeCode();
     } while (rooms.has(code));
@@ -115,33 +125,24 @@ io.on("connection", socket => {
     };
 
     rooms.set(code, room);
-
     socket.join(code);
     socket.data.room = code;
-
     socket.emit("roomJoined", publicRoom(room));
   });
 
   socket.on("joinRoom", ({ code, name } = {}) => {
     code = String(code || "").trim().toUpperCase();
-
     const room = rooms.get(code);
 
     if (!room) {
-      return socket.emit(
-        "joinError",
-        "Room not found. Check the code."
-      );
+      return socket.emit("joinError", "Room not found. Check the code.");
     }
 
     if (room.players.length >= 2) {
       return socket.emit("joinError", "That room is full.");
     }
 
-    const player = createPlayer(socket, name, 2);
-
-    room.players.push(player);
-
+    room.players.push(createPlayer(socket, name, 2));
     socket.join(code);
     socket.data.room = code;
 
@@ -157,24 +158,17 @@ io.on("connection", socket => {
 
     player.ready = true;
 
-    if (
-      room.players.length === 2 &&
-      room.players.every(p => p.ready)
-    ) {
+    if (room.players.length === 2 && room.players.every(p => p.ready)) {
       room.started = true;
       room.lastTick = Date.now();
-
       io.to(room.code).emit("gameStarted");
     }
 
     io.to(room.code).emit("roomUpdate", publicRoom(room));
   });
 
-  // PLAYER INPUT
-
   socket.on("input", input => {
     const room = rooms.get(socket.data.room);
-
     if (!room || !room.started) return;
 
     const player = room.players.find(p => p.id === socket.id);
@@ -189,12 +183,9 @@ io.on("connection", socket => {
     };
   });
 
-  // DISCONNECT
-
   socket.on("disconnect", () => {
     const code = socket.data.room;
     const room = rooms.get(code);
-
     if (!room) return;
 
     room.players = room.players.filter(p => p.id !== socket.id);
@@ -203,7 +194,6 @@ io.on("connection", socket => {
       rooms.delete(code);
     } else {
       room.started = false;
-
       room.players[0].ready = false;
       room.ball = createBall();
 
@@ -213,7 +203,7 @@ io.on("connection", socket => {
   });
 });
 
-// GAME PHYSICS
+// PLAYER MOVEMENT
 
 function movePlayer(player, dt) {
   const input = player.input;
@@ -223,14 +213,12 @@ function movePlayer(player, dt) {
     PLAYER_SPEED;
 
   player.x += player.vx * dt;
+  player.x = Math.max(30, Math.min(COURT.width - 30, player.x));
 
-  player.x = Math.max(
-    35,
-    Math.min(COURT.width - 35, player.x)
-  );
-
-  if (input.up && player.y >= COURT.floor) {
+  // Jump only when the jump key is newly pressed.
+  if (input.up && !player.previousInput.up && player.y >= COURT.floor) {
     player.vy = -JUMP_POWER;
+    player.action = "jump";
   }
 
   player.vy += GRAVITY * dt;
@@ -239,15 +227,14 @@ function movePlayer(player, dt) {
   if (player.y >= COURT.floor) {
     player.y = COURT.floor;
     player.vy = 0;
+    if (!player.dunking) player.action = "idle";
   }
 }
 
 function followHolder(ball, holder) {
-  const offset = holder.side === 1 ? 25 : -25;
-
-  ball.x = holder.x + offset;
-  ball.y = holder.y - 28;
-
+  const direction = holder.side === 1 ? 1 : -1;
+  ball.x = holder.x + direction * 25;
+  ball.y = holder.y - 55;
   ball.vx = 0;
   ball.vy = 0;
 }
@@ -255,30 +242,27 @@ function followHolder(ball, holder) {
 function updateFreeBall(ball, dt) {
   ball.x += ball.vx * dt;
   ball.y += ball.vy * dt;
+  ball.vy += BALL_GRAVITY * dt;
 
-  ball.vy += 900 * dt;
+  ball.vx *= Math.pow(0.998, dt * 60);
 
-  ball.vx *= Math.pow(0.995, dt * 60);
-
-  // Ground collision and bouncing.
   if (ball.y >= COURT.ballFloor) {
     ball.y = COURT.ballFloor;
-    ball.vy *= -0.38;
+    ball.vy *= -0.42;
 
-    if (Math.abs(ball.vy) < 35) {
-      ball.vy = 0;
-    }
+    if (Math.abs(ball.vy) < 35) ball.vy = 0;
+    if (Math.abs(ball.vx) < 10 && ball.vy === 0) ball.vx = 0;
+  }
 
-    if (Math.abs(ball.vx) < 12 && ball.vy === 0) {
-      ball.vx = 0;
-    }
+  if (ball.x < 15 || ball.x > COURT.width - 15) {
+    ball.vx *= -0.55;
+    ball.x = Math.max(15, Math.min(COURT.width - 15, ball.x));
   }
 }
 
 function tryPickupBall(room) {
   const ball = room.ball;
-
-  if (ball.owner) return;
+  if (ball.owner || ball.dunking) return;
   if (Date.now() < ball.pickupLockoutUntil) return;
 
   const nearest = room.players
@@ -286,23 +270,108 @@ function tryPickupBall(room) {
       player,
       distance: Math.hypot(
         player.x - ball.x,
-        (player.y - 28) - ball.y
+        (player.y - 45) - ball.y
       )
     }))
     .sort((a, b) => a.distance - b.distance)[0];
 
-  // Players can collect a ball when they get close enough.
-  if (nearest && nearest.distance < 55) {
+  if (nearest && nearest.distance < 48) {
     ball.owner = nearest.player.id;
     ball.vx = 0;
     ball.vy = 0;
   }
 }
 
+// SHOOTING AND DUNKING
+
+function shootBall(room, player) {
+  const ball = room.ball;
+  if (ball.owner !== player.id) return;
+
+  const direction = player.side === 1 ? 1 : -1;
+  const hoopX = player.side === 1
+    ? COURT.rightHoop
+    : COURT.leftHoop;
+
+  const distance = Math.abs(hoopX - player.x);
+  const airborne = player.y < COURT.floor - 18;
+
+  // A dunk is possible only close to the hoop while jumping.
+  if (distance < 112 && airborne) {
+    player.dunking = true;
+    player.action = "dunk";
+    player.actionUntil = Date.now() + 480;
+
+    ball.owner = null;
+    ball.dunking = true;
+    ball.dunkTimer = 0.48;
+    ball.x = hoopX - direction * 12;
+    ball.y = COURT.hoopY - 42;
+    ball.vx = direction * 80;
+    ball.vy = 160;
+    ball.pickupLockoutUntil = Date.now() + 1000;
+    return;
+  }
+
+  // Normal shot: calculate a launch arc aimed at the hoop.
+  ball.owner = null;
+
+  ball.x = player.x + direction * 25;
+  ball.y = player.y - 55;
+
+  const horizontalDistance = Math.max(80, distance - 25);
+  const horizontalSpeed = Math.max(
+    390,
+    Math.min(650, 350 + horizontalDistance * 0.32)
+  );
+
+  const flightTime = horizontalDistance / horizontalSpeed;
+  const verticalDistance = COURT.hoopY - ball.y;
+
+  ball.vx = direction * horizontalSpeed;
+  ball.vy =
+    (verticalDistance - 0.5 * BALL_GRAVITY * flightTime * flightTime) /
+    flightTime;
+
+  // A little extra lift makes shots visibly arc.
+  ball.vy = Math.min(ball.vy, -300);
+
+  ball.dunking = false;
+  ball.pickupLockoutUntil = Date.now() + 650;
+  player.action = "shoot";
+  player.actionUntil = Date.now() + 350;
+}
+
+function handleShooting(room) {
+  for (const player of room.players) {
+    const pressed = player.input.shoot && !player.previousInput.shoot;
+
+    if (pressed && room.ball.owner === player.id) {
+      shootBall(room, player);
+    }
+  }
+}
+
+function handleDunk(room, dt) {
+  const ball = room.ball;
+  if (!ball.dunking) return;
+
+  ball.dunkTimer -= dt;
+
+  if (ball.dunkTimer <= 0) {
+    const scorer = room.players.find(p => p.dunking);
+    if (scorer) scoreBasket(room, scorer);
+
+    ball.dunking = false;
+    room.ball = createBall();
+  }
+}
+
+// STEALING
+
 function handleSteals(room) {
   const ball = room.ball;
-
-  if (!ball.owner) return;
+  if (!ball.owner || ball.dunking) return;
 
   const holder = room.players.find(p => p.id === ball.owner);
   if (!holder) {
@@ -314,9 +383,8 @@ function handleSteals(room) {
 
   for (const player of room.players) {
     if (player.id === holder.id) continue;
-
     if (!player.input.steal) continue;
-    if (now - player.lastStealAt < 600) continue;
+    if (now - player.lastStealAt < 650) continue;
 
     const distance = Math.hypot(
       player.x - holder.x,
@@ -326,55 +394,15 @@ function handleSteals(room) {
     if (distance < 65) {
       ball.owner = player.id;
       player.lastStealAt = now;
+      player.action = "steal";
       break;
     }
   }
 }
 
-function handleShooting(room) {
-  const ball = room.ball;
+// SCORING
 
-  if (!ball.owner) return;
-
-  const holder = room.players.find(p => p.id === ball.owner);
-  if (!holder) return;
-
-  if (!holder.input.shoot || holder.didShoot) return;
-
-  holder.didShoot = true;
-
-  // Release the ball.
-  ball.owner = null;
-
-  const direction = holder.side === 1 ? 1 : -1;
-
-  ball.x = holder.x + direction * 25;
-  ball.y = holder.y - 28;
-
-  ball.vx = direction * 520;
-  ball.vy = -570;
-
-  // Prevent the shooter from instantly picking up their shot.
-  ball.pickupLockoutUntil = Date.now() + 450;
-}
-
-function checkBasket(room) {
-  const ball = room.ball;
-
-  if (ball.y >= 205) return;
-
-  let scorer = null;
-
-  if (ball.x > 790 && ball.vx > 0) {
-    scorer = room.players.find(p => p.side === 1);
-  }
-
-  if (ball.x < 110 && ball.vx < 0) {
-    scorer = room.players.find(p => p.side === 2);
-  }
-
-  if (!scorer) return;
-
+function scoreBasket(room, scorer) {
   scorer.score += 2;
 
   io.to(room.code).emit("basket", {
@@ -382,18 +410,40 @@ function checkBasket(room) {
     score: room.players.map(p => p.score)
   });
 
-  // Reset players and ball.
   room.players.forEach(p => {
     p.x = p.side === 1 ? 180 : 720;
     p.y = COURT.floor;
     p.vx = 0;
     p.vy = 0;
+    p.dunking = false;
+    p.action = "idle";
   });
 
   room.ball = createBall();
 }
 
-// MAIN GAME LOOP
+function checkBasket(room) {
+  const ball = room.ball;
+  if (ball.owner || ball.dunking) return;
+
+  // A valid basket must pass through the hoop area while descending.
+  if (ball.vy <= 0) return;
+  if (ball.y < COURT.hoopY - 3 || ball.y > COURT.hoopY + 20) return;
+
+  let scorer = null;
+
+  if (Math.abs(ball.x - COURT.rightHoop) < 23 && ball.vx > 0) {
+    scorer = room.players.find(p => p.side === 1);
+  }
+
+  if (Math.abs(ball.x - COURT.leftHoop) < 23 && ball.vx < 0) {
+    scorer = room.players.find(p => p.side === 2);
+  }
+
+  if (scorer) scoreBasket(room, scorer);
+}
+
+// GAME LOOP
 
 setInterval(() => {
   const now = Date.now();
@@ -401,57 +451,44 @@ setInterval(() => {
   for (const room of rooms.values()) {
     if (!room.started || room.players.length !== 2) continue;
 
-    const dt = Math.min(
-      (now - room.lastTick) / 1000,
-      0.05
-    );
-
+    const dt = Math.min((now - room.lastTick) / 1000, 0.05);
     room.lastTick = now;
 
-    const ball = room.ball;
-
-    // Move both players.
     for (const player of room.players) {
       movePlayer(player, dt);
     }
 
-    // Update ball position.
-    if (ball.owner) {
-      const holder = room.players.find(p => p.id === ball.owner);
-
-      if (holder) {
-        followHolder(ball, holder);
-      } else {
-        ball.owner = null;
+    if (room.ball.dunking) {
+      handleDunk(room, dt);
+    } else {
+      if (room.ball.owner) {
+        const holder = room.players.find(p => p.id === room.ball.owner);
+        if (holder) followHolder(room.ball, holder);
+        else room.ball.owner = null;
       }
+
+      handleShooting(room);
+
+      if (!room.ball.owner && !room.ball.dunking) {
+        updateFreeBall(room.ball, dt);
+        checkBasket(room);
+
+        if (!room.ball.dunking) {
+          tryPickupBall(room);
+        }
+      }
+
+      handleSteals(room);
     }
 
-    // Handle shooting before pickup so a released shot
-    // cannot immediately be collected by the shooter.
-    handleShooting(room);
-
-    // Update free ball physics.
-    if (!ball.owner) {
-      updateFreeBall(ball, dt);
-
-      // Try to collect the ball.
-      tryPickupBall(room);
-    }
-
-    // Stealing.
-    handleSteals(room);
-
-    // Shooting key can be pressed again after release.
     for (const player of room.players) {
-      if (!player.input.shoot) {
-        player.didShoot = false;
+      if (player.actionUntil < now && !player.dunking) {
+        player.action = player.y < COURT.floor ? "jump" : "idle";
       }
+
+      player.previousInput = { ...player.input };
     }
 
-    // Check scoring.
-    checkBasket(room);
-
-    // Keep clients synchronized.
     emitState(room);
   }
 }, 1000 / 30);
