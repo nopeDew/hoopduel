@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -11,17 +12,17 @@ body{
   background:radial-gradient(ellipse at 50% 0%,#344d70 0%,#131e30 55%,#080d17 100%);
   color:#f6f7fb;font-family:Inter,system-ui,Arial,sans-serif
 }
-.wrap{width:min(1450px,98vw);padding:22px}
-.brand{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
-h1{font-size:clamp(27px,4vw,44px);letter-spacing:4px;margin:0;font-weight:950}
+.wrap{width:min(1500px,99vw);padding:14px}
+.brand{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+h1{font-size:clamp(25px,3vw,40px);letter-spacing:4px;margin:0;font-weight:950}
 .tag{color:#ffbd65;font-size:12px;font-weight:900;letter-spacing:3px}
 .panel{
   background:linear-gradient(145deg,#1d2a40,#111b2b);
-  border:1px solid #465774;border-radius:20px;padding:22px;
+  border:1px solid #465774;border-radius:20px;padding:20px;
   box-shadow:0 24px 80px #0008,inset 0 1px #ffffff12
 }
 #lobby{max-width:600px;margin:auto}
-input,button{border:0;border-radius:11px;padding:14px 16px;font:inherit}
+input,button{border:0;border-radius:11px;padding:13px 15px;font:inherit}
 input{background:#0c1524;color:white;border:1px solid #43536b;min-width:0;flex:1}
 button{background:linear-gradient(135deg,#ffd078,#ff922f);color:#291805;font-weight:900;cursor:pointer}
 button.secondary{background:#354762;color:white}
@@ -31,24 +32,62 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .hidden{display:none!important}
 .code{font-size:30px;letter-spacing:6px;color:#ffc36e;font-weight:950}
 .players{color:#d1d9e6;margin:14px 0}
-#game{margin-top:18px;padding:18px}
-.hud{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:2px 4px 12px;font-weight:950}
-.hud span:nth-child(2){color:#ffc16c;font-size:12px;letter-spacing:2px}
-canvas{
-  width:100%;height:auto;display:block;border-radius:13px;
-  border:2px solid #bd9663;
-  background:#9b6338;
-  box-shadow:0 16px 50px #0009,0 0 25px #ffcc7b18
+
+#game{
+  margin-top:10px;padding:14px;
+  position:relative;overflow:hidden
 }
-.charge-area{display:flex;align-items:center;gap:12px;margin:8px 4px 13px}
-.charge-label{font-size:12px;color:#d3dce9;font-weight:900;letter-spacing:1px;min-width:90px}
-.charge-track{height:12px;background:#09111e;border-radius:20px;overflow:hidden;flex:1;border:1px solid #46536a}
-#chargeBar{height:100%;width:0%;background:linear-gradient(90deg,#e65b40,#ffb746,#73e6a2);border-radius:20px}
-#chargeText{font-size:12px;color:#ffd18c;min-width:75px;text-align:right;font-weight:800}
-.controls{font-size:13px;color:#c0cddd;line-height:1.9;margin-top:12px}
+.game-top{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:12px;margin:0 2px 10px
+}
+.hud{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:12px;flex:1;font-weight:950
+}
+.hud span:nth-child(2){
+  color:#ffc16c;font-size:12px;letter-spacing:2px;white-space:nowrap
+}
+#fullscreen{
+  padding:9px 13px;background:#354762;color:#fff;
+  border:1px solid #60718b;font-size:12px
+}
+.canvas-wrap{
+  position:relative;width:100%;overflow:hidden;border-radius:13px;
+  background:#9b6338
+}
+canvas{
+  width:100%;height:auto;display:block;
+  border:2px solid #bd9663;border-radius:13px;
+  background:#9b6338;touch-action:none
+}
+.controls{
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  font-size:12px;color:#c0cddd;line-height:1.7;margin:10px 4px 0
+}
+.controls strong{color:#fff}
+#game:fullscreen{
+  width:100vw;height:100vh;margin:0;padding:12px;border-radius:0;
+  display:flex;flex-direction:column;background:#0b1422;
+  border:0
+}
+#game:fullscreen .game-top{flex:none}
+#game:fullscreen .canvas-wrap{
+  flex:1;min-height:0;display:flex;align-items:center;justify-content:center
+}
+#game:fullscreen canvas{
+  width:auto;height:auto;max-width:100%;max-height:100%;
+  object-fit:contain
+}
+#game:fullscreen .controls{flex:none;margin-top:8px}
 @media(max-width:650px){
- .wrap{padding:8px}.panel{padding:12px}.brand{align-items:flex-start;gap:8px;flex-direction:column}
- .hud{font-size:11px}.controls{font-size:11px}
+  .wrap{padding:6px}.panel{padding:10px}
+  .brand{align-items:flex-start;gap:8px;flex-direction:column}
+  .game-top{align-items:flex-start}
+  .hud{font-size:11px;gap:5px}
+  .hud span:nth-child(2){font-size:9px}
+  .controls{font-size:10px}
+  #fullscreen{font-size:10px;padding:8px}
 }
 </style>
 </head>
@@ -79,27 +118,24 @@ canvas{
   </section>
 
   <section id="game" class="panel hidden">
-    <div class="hud">
-      <span id="p1">PLAYER 1: 0</span>
-      <span>FIRST TO 10</span>
-      <span id="p2">PLAYER 2: 0</span>
+    <div class="game-top">
+      <div class="hud">
+        <span id="p1">PLAYER 1: 0</span>
+        <span>FIRST TO 10</span>
+        <span id="p2">PLAYER 2: 0</span>
+      </div>
+      <button id="fullscreen">⛶ FULLSCREEN</button>
     </div>
 
-    <div class="charge-area">
-      <span class="charge-label">SHOT TIMING</span>
-      <div class="charge-track"><div id="chargeBar"></div></div>
-      <span id="chargeText">HOLD SPACE</span>
+    <div class="canvas-wrap">
+      <canvas id="court" width="1200" height="600"></canvas>
     </div>
-
-    <canvas id="court" width="1200" height="600"></canvas>
 
     <div class="controls">
-      **Player 1:** A/D to move, W to jump.
-      &nbsp; • &nbsp;
-      **Player 2:** ←/→ to move, ↑ to jump.
-      <br>
-      **Both:** Hold/release Space to shoot, Shift to steal or stun.
-      Jump close to the basket to dunk. Jump into the opponent's shot to block it.
+      <span><strong>Player 1:</strong> A/D move · W jump</span>
+      <span><strong>Player 2:</strong> ←/→ move · ↑ jump</span>
+      <span><strong>Both:</strong> Hold/release Space to shoot · Shift to steal or stun</span>
+      <span>Jump near the basket to dunk · Jump into a shot to block</span>
     </div>
   </section>
 </main>
@@ -129,8 +165,26 @@ $("ready").onclick=()=>{
   $("status").textContent="Waiting for your opponent...";
 };
 
+$("fullscreen").onclick=async()=>{
+  try{
+    if(!document.fullscreenElement){
+      await $("game").requestFullscreen();
+    }else{
+      await document.exitFullscreen();
+    }
+  }catch(error){
+    announce("FULLSCREEN NOT AVAILABLE");
+  }
+};
+
+document.addEventListener("fullscreenchange",()=>{
+  $("fullscreen").textContent=document.fullscreenElement
+    ?"⛶ EXIT FULLSCREEN"
+    :"⛶ FULLSCREEN";
+});
+
 socket.on("roomJoined",room=>{
-  mySide=room.players.length;
+  mySide=room.players.find(p=>p.name===$("name").value)?.side||room.players.length;
   $("roomInfo").classList.remove("hidden");
   $("codeText").textContent=room.code;
   $("status").textContent="Room ready. Share the code with your opponent.";
@@ -151,7 +205,9 @@ socket.on("gameStarted",()=>{
   $("lobby").classList.add("hidden");
   $("game").classList.remove("hidden");
   started=true;
-  announce("JUMP BALL!");
+  targetState=null;
+  displayState=null;
+  announce("GAME ON!");
 });
 
 socket.on("opponentLeft",()=>{
@@ -163,35 +219,28 @@ socket.on("opponentLeft",()=>{
 });
 
 socket.on("basket",data=>{
-  $("status").textContent=`${data.scorer} scored! Opponent gets possession.`;
-  announce(`${data.scorer.toUpperCase()} SCORES!`);
+  $("status").textContent=`${data.scorer} scored ${data.points}! Opponent gets possession.`;
+  announce(`${data.scorer.toUpperCase()} +${data.points}!`);
 });
 
-socket.on("jumpBallWon",data=>announce(`${data.player.toUpperCase()} GETS IT!`));
 socket.on("blocked",data=>announce(`BLOCKED BY ${data.player.toUpperCase()}!`));
 socket.on("stolen",data=>announce(`${data.player.toUpperCase()} STEALS IT!`));
 socket.on("stunned",data=>announce(`${data.player.toUpperCase()} IS STUNNED!`));
 
 socket.on("shotTaken",data=>{
-  announce(data.quality>=80?"PERFECT RELEASE!":data.quality<35?"TOUGH SHOT!":"SHOT UP!");
+  if(data.green) announce("GREEN RELEASE!");
+  else if(data.quality<35) announce("TOUGH SHOT!");
+  else announce(`${data.points}-POINT SHOT!`);
 });
 
 function announce(text){
   message=text;
-  messageUntil=Date.now()+1300;
+  messageUntil=Date.now()+1150;
 }
 
 socket.on("state",state=>{
   targetState=state;
-  updateCharge(state);
 });
-
-function updateCharge(state){
-  const me=state.players.find(p=>p.side===mySide);
-  const charge=me?.charge||0;
-  $("chargeBar").style.width=`${Math.min(100,charge*100)}%`;
-  $("chargeText").textContent=me?.charging?`${Math.round(charge*100)}%`:"HOLD SPACE";
-}
 
 window.addEventListener("keydown",e=>{
   if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key))e.preventDefault();
@@ -251,7 +300,6 @@ function drawArena(ctx,time){
   ctx.fillStyle=bg;
   ctx.fillRect(0,0,1200,470);
 
-  // Distant arena seating and crowd silhouettes.
   for(let row=0;row<4;row++){
     const y=105+row*48;
     for(let x=10;x<1200;x+=17){
@@ -267,7 +315,6 @@ function drawArena(ctx,time){
     }
   }
 
-  // Arena roof and steel beams.
   const roof=ctx.createLinearGradient(0,0,0,100);
   roof.addColorStop(0,"#080e18");
   roof.addColorStop(1,"#1c2a3d");
@@ -283,7 +330,6 @@ function drawArena(ctx,time){
     ctx.stroke();
   }
 
-  // Stadium lights.
   for(const x of [120,360,600,840,1080]){
     const beam=ctx.createRadialGradient(x,55,4,x,210,190);
     beam.addColorStop(0,"#fff5cf40");
@@ -294,7 +340,6 @@ function drawArena(ctx,time){
     glow(ctx,x,29,20,"#fff0bd",.6);
   }
 
-  // Arena side wall.
   ctx.fillStyle="#101a29";
   ctx.fillRect(0,265,1200,105);
   ctx.strokeStyle="#64748b55";
@@ -304,7 +349,6 @@ function drawArena(ctx,time){
   ctx.lineTo(1200,270);
   ctx.stroke();
 
-  // Digital advertising boards.
   for(let x=60;x<1200;x+=220){
     const board=ctx.createLinearGradient(x,0,x+175,0);
     board.addColorStop(0,"#153c58");
@@ -328,7 +372,6 @@ function drawFloor(ctx){
   ctx.fillStyle=wood;
   ctx.fillRect(0,365,1200,235);
 
-  // Parquet boards.
   for(let y=370;y<600;y+=23){
     const row=Math.floor((y-370)/23);
     for(let x=0;x<1200;x+=150){
@@ -340,7 +383,6 @@ function drawFloor(ctx){
     }
   }
 
-  // Glossy floor reflection.
   const shine=ctx.createLinearGradient(0,365,0,500);
   shine.addColorStop(0,"#ffffff20");
   shine.addColorStop(1,"#ffffff00");
@@ -354,7 +396,6 @@ function drawFloor(ctx){
   ctx.lineTo(1200,470);
   ctx.stroke();
 
-  // Center circle and lines.
   ctx.beginPath();
   ctx.moveTo(600,470);
   ctx.lineTo(600,600);
@@ -364,7 +405,6 @@ function drawFloor(ctx){
   ctx.ellipse(600,535,83,58,0,0,Math.PI*2);
   ctx.stroke();
 
-  // Paint areas.
   ctx.fillStyle="#a54c39";
   ctx.fillRect(0,470,205,130);
   ctx.fillRect(995,470,205,130);
@@ -386,7 +426,6 @@ function drawFloor(ctx){
   ctx.ellipse(1110,535,335,220,0,Math.PI-1.12,Math.PI+1.12);
   ctx.stroke();
 
-  // Center-court logo.
   ctx.save();
   ctx.globalAlpha=.17;
   ctx.fillStyle="#fff";
@@ -399,17 +438,14 @@ function drawFloor(ctx){
 function drawHoop(ctx,x,direction){
   ctx.save();
 
-  // Support structure.
   const pole=ctx.createLinearGradient(x-12,0,x+12,0);
   pole.addColorStop(0,"#26313e");
   pole.addColorStop(.5,"#aab5bf");
   pole.addColorStop(1,"#1c2734");
   ctx.fillStyle=pole;
   ctx.fillRect(x-9,130,18,340);
-
   rounded(ctx,x-31,457,62,13,5,"#252e39");
 
-  // Backboard support.
   ctx.strokeStyle="#293745";
   ctx.lineWidth=12;
   ctx.beginPath();
@@ -417,7 +453,6 @@ function drawHoop(ctx,x,direction){
   ctx.lineTo(x,183);
   ctx.stroke();
 
-  // Backboard glass.
   const glass=ctx.createLinearGradient(x-6,0,x+7,0);
   glass.addColorStop(0,"#dcecf2");
   glass.addColorStop(.5,"#ffffff");
@@ -431,7 +466,6 @@ function drawHoop(ctx,x,direction){
   ctx.lineWidth=2;
   ctx.strokeRect(x-7,171,14,26);
 
-  // Rim.
   const rimX=x+direction*34;
   ctx.save();
   ctx.shadowColor="#ff6a35";
@@ -443,7 +477,6 @@ function drawHoop(ctx,x,direction){
   ctx.stroke();
   ctx.restore();
 
-  // Net.
   ctx.strokeStyle="#f2eee6";
   ctx.lineWidth=1.7;
   for(let i=-3;i<=3;i++){
@@ -459,7 +492,6 @@ function drawHoop(ctx,x,direction){
     ctx.lineTo(rimX+spread,y);
     ctx.stroke();
   }
-
   ctx.restore();
 }
 
@@ -473,10 +505,8 @@ function drawPlayer(ctx,p,time){
   const face=blue?1:-1;
   const run=Math.abs(p.vx)>12;
   const stride=run?Math.sin(time*.014)*10:0;
-  const jumping=y<465;
   const stunned=p.stunned;
 
-  // Ground shadow.
   ctx.save();
   ctx.globalAlpha=clamp(1-(470-y)/250,.2,.4);
   ctx.fillStyle="#120e0b";
@@ -485,7 +515,6 @@ function drawPlayer(ctx,p,time){
   ctx.fill();
   ctx.restore();
 
-  // Legs.
   ctx.lineCap="round";
   ctx.lineWidth=13;
   ctx.strokeStyle=dark;
@@ -498,14 +527,12 @@ function drawPlayer(ctx,p,time){
   ctx.lineTo(x+13-stride,y-9);
   ctx.stroke();
 
-  // Shoes.
   rounded(ctx,x-25+stride,y-12,23,10,5,"#f3f4f2");
   rounded(ctx,x+3-stride,y-12,23,10,5,"#e9edf2");
   ctx.fillStyle="#303b4a";
   ctx.fillRect(x-22+stride,y-5,19,3);
   ctx.fillRect(x+5-stride,y-5,19,3);
 
-  // Shorts.
   const shorts=ctx.createLinearGradient(x-20,y-70,x+20,y-30);
   shorts.addColorStop(0,main);
   shorts.addColorStop(1,dark);
@@ -521,7 +548,6 @@ function drawPlayer(ctx,p,time){
   ctx.closePath();
   ctx.fill();
 
-  // Jersey with highlights.
   const shirt=ctx.createLinearGradient(x-22,y-125,x+22,y-65);
   shirt.addColorStop(0,light);
   shirt.addColorStop(.22,main);
@@ -541,17 +567,14 @@ function drawPlayer(ctx,p,time){
   ctx.lineWidth=2;
   ctx.stroke();
 
-  // Jersey number and trim.
   ctx.fillStyle="#fff";
   ctx.font="900 19px Arial";
   ctx.textAlign="center";
   ctx.fillText(blue?"01":"02",x,y-82);
 
-  // Neck.
   ctx.fillStyle=skin;
   ctx.fillRect(x-6,y-128,12,14);
 
-  // Arms.
   ctx.lineWidth=10;
   ctx.strokeStyle=skin;
   ctx.beginPath();
@@ -575,7 +598,6 @@ function drawPlayer(ctx,p,time){
   ctx.lineTo(x+face*29,y-77);
   ctx.stroke();
 
-  // Head and hair.
   ctx.fillStyle=skin;
   ctx.beginPath();
   ctx.ellipse(x,y-145,14,18,0,0,Math.PI*2);
@@ -594,7 +616,6 @@ function drawPlayer(ctx,p,time){
   ctx.arc(x+face*6,y-145,2,0,Math.PI*2);
   ctx.fill();
 
-  // Player nameplate.
   ctx.save();
   ctx.textAlign="center";
   ctx.font="bold 14px Arial";
@@ -617,12 +638,48 @@ function drawPlayer(ctx,p,time){
     ctx.fillText("STUNNED",x,y-194);
     ctx.restore();
   }
+
+  if(p.charging){
+    drawShotMeter(ctx,x,y-215,p.charge);
+  }
+}
+
+function drawShotMeter(ctx,x,y,charge){
+  const w=112,h=13;
+  const left=x-w/2;
+  const normalized=clamp(charge/1.2,0,1);
+
+  ctx.save();
+  ctx.shadowColor="#000";
+  ctx.shadowBlur=8;
+  rounded(ctx,left-3,y-3,w+6,h+6,7,"#101722");
+  ctx.restore();
+
+  // Red and yellow zones, with a distinct green release window.
+  const gradient=ctx.createLinearGradient(left,0,left+w,0);
+  gradient.addColorStop(0,"#e44c45");
+  gradient.addColorStop(.42,"#f0b744");
+  gradient.addColorStop(.55,"#42e58b");
+  gradient.addColorStop(.65,"#42e58b");
+  gradient.addColorStop(.78,"#f0b744");
+  gradient.addColorStop(1,"#e44c45");
+  rounded(ctx,left,y,w,h,5,gradient);
+
+  ctx.fillStyle="#ffffff";
+  ctx.fillRect(left+w*normalized-2,y-4,4,h+8);
+
+  ctx.textAlign="center";
+  ctx.font="900 10px Arial";
+  ctx.fillStyle="#fff";
+  ctx.shadowColor="#000";
+  ctx.shadowBlur=5;
+  ctx.fillText("RELEASE IN GREEN",x,y-8);
+  ctx.restore();
 }
 
 function drawBasketball(ctx,x,y,time){
   const r=22;
 
-  // Soft shadow.
   ctx.save();
   ctx.globalAlpha=.22;
   ctx.fillStyle="#23160e";
@@ -631,7 +688,6 @@ function drawBasketball(ctx,x,y,time){
   ctx.fill();
   ctx.restore();
 
-  // Ball gradient: brighter and lighter than before.
   const ball=ctx.createRadialGradient(x-9,y-11,2,x+1,y+1,r+3);
   ball.addColorStop(0,"#fff0ad");
   ball.addColorStop(.25,"#ffd16d");
@@ -647,7 +703,6 @@ function drawBasketball(ctx,x,y,time){
   ctx.fill();
   ctx.restore();
 
-  // Seams.
   ctx.save();
   ctx.beginPath();
   ctx.arc(x,y,r-1,0,Math.PI*2);
@@ -673,10 +728,8 @@ function drawBasketball(ctx,x,y,time){
   ctx.beginPath();
   ctx.ellipse(x,y,r*.53,r,-Math.sin(time*.002)*.15,0,Math.PI*2);
   ctx.stroke();
-
   ctx.restore();
 
-  // Gloss highlight.
   const shine=ctx.createRadialGradient(x-9,y-10,1,x-5,y-7,13);
   shine.addColorStop(0,"#ffffffb8");
   shine.addColorStop(1,"#ffffff00");
@@ -705,8 +758,7 @@ function animate(now){
     displayState=JSON.parse(JSON.stringify(targetState));
   }
 
-  // Frame-rate-independent smoothing.
-  const smooth=1-Math.exp(-dt*19);
+  const smooth=1-Math.exp(-dt*24);
 
   displayState.players=targetState.players.map((target,index)=>{
     const old=displayState.players[index]||target;
@@ -751,15 +803,6 @@ function draw(state,time){
     ctx.shadowColor="#000";
     ctx.shadowBlur=13;
     ctx.fillText(message,600,125);
-    ctx.restore();
-  }else if(state.jumpBall){
-    ctx.save();
-    ctx.textAlign="center";
-    ctx.font="1000 34px Arial";
-    ctx.fillStyle="#fff";
-    ctx.shadowColor="#000";
-    ctx.shadowBlur=12;
-    ctx.fillText("JUMP FOR THE BALL!",600,125);
     ctx.restore();
   }
 }
