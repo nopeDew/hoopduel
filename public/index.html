@@ -9,17 +9,23 @@
 *{box-sizing:border-box}
 body{
   margin:0;background:radial-gradient(ellipse at top,#263c59,#101827 75%);
-  color:#f4f6fb;font-family:Inter,system-ui,Arial;
-  min-height:100vh;display:grid;place-items:center
+  color:#f4f6fb;font-family:Inter,system-ui,Arial;min-height:100vh;
+  display:grid;place-items:center
 }
 .wrap{width:min(1100px,97vw);padding:22px}
 .brand{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
 h1{font-size:clamp(25px,5vw,42px);letter-spacing:2px;margin:0}
 .tag{color:#ffb34d;font-size:12px;font-weight:800;letter-spacing:2px}
-.panel{background:#1b2739;border:1px solid #34445d;border-radius:18px;padding:20px;box-shadow:0 18px 55px #0005}
+.panel{
+  background:#1b2739;border:1px solid #34445d;border-radius:18px;
+  padding:20px;box-shadow:0 18px 55px #0005
+}
 .row{display:flex;gap:10px;flex-wrap:wrap}
 input,button{border:0;border-radius:10px;padding:13px 15px;font:inherit}
-input{background:#0e1725;color:white;min-width:0;flex:1;border:1px solid #3a4a61}
+input{
+  background:#0e1725;color:white;min-width:0;flex:1;
+  border:1px solid #3a4a61
+}
 button{background:#ff9d32;color:#1b1b1b;font-weight:850;cursor:pointer}
 button.secondary{background:#31435d;color:white}
 button:disabled{opacity:.45;cursor:not-allowed}
@@ -28,15 +34,26 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .hidden{display:none!important}
 #game{margin-top:18px}
 canvas{
-  width:100%;aspect-ratio:900/500;display:block;
-  border-radius:12px;border:3px solid #bd8950;
-  background:#b77b40;box-shadow:0 12px 35px #0007
+  width:100%;aspect-ratio:900/500;display:block;border-radius:12px;
+  border:3px solid #bd8950;background:#b77b40;box-shadow:0 12px 35px #0007
 }
-.hud{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 2px;font-weight:850}
+.hud{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:8px;margin:10px 2px;font-weight:850
+}
 .hud span:nth-child(2){color:#ffbd65;font-size:12px;letter-spacing:1px}
 .controls{font-size:13px;color:#b8c5d8;line-height:1.8;margin-top:12px}
 .code{font-size:26px;letter-spacing:5px;color:#ffb34d;font-weight:900}
 .players{color:#c8d4e5;margin:12px 0}
+.charge-area{display:flex;align-items:center;gap:12px;margin:8px 2px 12px}
+.charge-label{font-size:12px;color:#c8d4e5;font-weight:800;min-width:90px}
+.charge-track{height:11px;background:#0d1725;border-radius:20px;overflow:hidden;flex:1}
+#chargeBar{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#e35b38,#ffb43f,#71d69b);
+  border-radius:20px;transition:width .04s linear
+}
+#chargeText{font-size:12px;color:#ffca83;min-width:75px;text-align:right}
 @media(max-width:600px){
   .wrap{padding:10px}.panel{padding:12px}
   .brand{align-items:flex-start;gap:10px;flex-direction:column}
@@ -76,14 +93,22 @@ canvas{
       <span>FIRST TO 10 WINS</span>
       <span id="p2">PLAYER 2: 0</span>
     </div>
+
+    <div class="charge-area">
+      <span class="charge-label">SHOT METER</span>
+      <div class="charge-track"><div id="chargeBar"></div></div>
+      <span id="chargeText">Hold SPACE</span>
+    </div>
+
     <canvas id="court" width="900" height="500"></canvas>
+
     <div class="controls">
       Move: <b>A / D</b> or <b>← / →</b>
       &nbsp; • &nbsp; Jump: <b>W</b> or <b>↑</b>
-      &nbsp; • &nbsp; Shoot: <b>Space</b>
+      &nbsp; • &nbsp; Shoot: <b>Hold / release Space</b>
       &nbsp; • &nbsp; Steal: <b>Shift</b>
       <br>
-      **Dunk:** Jump close to the basket and press Space.
+      Jump near the basket and release Space to dunk. Jump into an opponent's shot to block it.
       <br>
       Player 1 uses A/D/W. Player 2 uses ←/→/↑. Both use Space and Shift.
     </div>
@@ -97,7 +122,10 @@ const $ = id => document.getElementById(id);
 
 let mySide = 0;
 let started = false;
-let lastState = null;
+let targetState = null;
+let displayState = null;
+let jumpBallMessage = "";
+let messageUntil = 0;
 const keys = {};
 
 $("create").onclick = () =>
@@ -116,7 +144,10 @@ $("ready").onclick = () => {
 };
 
 socket.on("roomJoined",room => {
+  // The creator receives this with one player; the joiner receives it
+  // with two players. Existing players only receive roomUpdate.
   mySide = room.players.length;
+
   $("roomInfo").classList.remove("hidden");
   $("codeText").textContent = room.code;
   $("status").textContent = "Room created/joined. Share the code with your friend.";
@@ -137,25 +168,68 @@ socket.on("gameStarted",() => {
   $("lobby").classList.add("hidden");
   $("game").classList.remove("hidden");
   started = true;
+  jumpBallMessage = "JUMP BALL!";
+  messageUntil = Date.now() + 1800;
 });
 
 socket.on("opponentLeft",() => {
+  started = false;
+  $("lobby").classList.remove("hidden");
+  $("game").classList.add("hidden");
+  $("ready").disabled = false;
   $("status").textContent = "Your opponent left the room.";
 });
 
 socket.on("basket",data => {
-  $("status").textContent = `${data.scorer} scored!`;
+  $("status").textContent = `${data.scorer} scored! Possession changes.`;
+  jumpBallMessage = `${data.scorer} SCORES!`;
+  messageUntil = Date.now() + 1500;
+});
+
+socket.on("jumpBallWon",data => {
+  jumpBallMessage = `${data.player} GETS POSSESSION!`;
+  messageUntil = Date.now() + 1300;
+});
+
+socket.on("blocked",data => {
+  jumpBallMessage = `BLOCKED BY ${data.player.toUpperCase()}!`;
+  messageUntil = Date.now() + 1200;
+});
+
+socket.on("shotTaken",data => {
+  if (data.quality >= 80) {
+    jumpBallMessage = "GREAT RELEASE!";
+  } else if (data.quality < 35) {
+    jumpBallMessage = "TOUGH SHOT!";
+  } else {
+    jumpBallMessage = "SHOT UP!";
+  }
+  messageUntil = Date.now() + 850;
 });
 
 socket.on("state",state => {
-  lastState = state;
-  draw();
+  targetState = state;
+  updateChargeMeter(state);
 });
+
+function updateChargeMeter(state) {
+  const me = state.players.find(p => p.side === mySide);
+  const charging = !!me?.charging;
+  const charge = me?.charge || 0;
+
+  $("chargeBar").style.width = `${Math.min(100,charge*100)}%`;
+  $("chargeText").textContent = charging
+    ? `${Math.round(charge*100)}%`
+    : "Hold SPACE";
+}
 
 window.addEventListener("keydown",e => {
   if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key)) {
     e.preventDefault();
   }
+
+  if(e.repeat && e.key.toLowerCase() !== " ") return;
+
   keys[e.key.toLowerCase()] = true;
   sendInput();
 });
@@ -165,29 +239,37 @@ window.addEventListener("keyup",e => {
   sendInput();
 });
 
+window.addEventListener("blur",() => {
+  for(const key in keys) keys[key] = false;
+  sendInput();
+});
+
 function sendInput() {
   if(!started) return;
 
   socket.emit("input",{
-    left:mySide===1 ? keys.a : keys.arrowleft,
-    right:mySide===1 ? keys.d : keys.arrowright,
-    up:mySide===1 ? keys.w : keys.arrowup,
-    shoot:keys[" "],
-    steal:keys.shift
+    left:mySide===1 ? !!keys.a : !!keys.arrowleft,
+    right:mySide===1 ? !!keys.d : !!keys.arrowright,
+    up:mySide===1 ? !!keys.w : !!keys.arrowup,
+    shoot:!!keys[" "],
+    steal:!!keys.shift
   });
 }
 
-// COURT DRAWING
+function roundedRect(ctx,x,y,w,h,r,color) {
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.roundRect(x,y,w,h,r);
+  ctx.fill();
+}
 
 function drawCourt(ctx) {
-  // Background wall.
-  const wall = ctx.createLinearGradient(0,0,0,390);
+  const wall=ctx.createLinearGradient(0,0,0,390);
   wall.addColorStop(0,"#26394e");
   wall.addColorStop(1,"#526176");
-  ctx.fillStyle = wall;
+  ctx.fillStyle=wall;
   ctx.fillRect(0,0,900,390);
 
-  // Gym lights.
   for(const x of [150,450,750]) {
     ctx.fillStyle="#fff8d9";
     ctx.shadowColor="#fff";
@@ -196,29 +278,26 @@ function drawCourt(ctx) {
   }
   ctx.shadowBlur=0;
 
-  // Far wall panels.
   for(let x=0;x<900;x+=90) {
     ctx.strokeStyle="#ffffff12";
     ctx.lineWidth=2;
     ctx.strokeRect(x,55,90,300);
   }
 
-  // Hardwood floor.
-  const floor = ctx.createLinearGradient(0,385,0,500);
+  const floor=ctx.createLinearGradient(0,385,0,500);
   floor.addColorStop(0,"#d6a066");
   floor.addColorStop(1,"#a96632");
   ctx.fillStyle=floor;
   ctx.fillRect(0,385,900,115);
 
-  // Floorboard lines.
   for(let y=400;y<500;y+=22) {
     ctx.strokeStyle="#74431f55";
-    ctx.lineWidth=1;
     ctx.beginPath();
     ctx.moveTo(0,y);
     ctx.lineTo(900,y);
     ctx.stroke();
   }
+
   for(let x=0;x<900;x+=100) {
     ctx.strokeStyle="#fff2d022";
     ctx.beginPath();
@@ -227,39 +306,30 @@ function drawCourt(ctx) {
     ctx.stroke();
   }
 
-  // Court surface boundary.
   ctx.strokeStyle="#fff0d5";
-  ctx.lineWidth=4;
+  ctx.lineWidth=3;
+
   ctx.beginPath();
   ctx.moveTo(12,390);
   ctx.lineTo(888,390);
   ctx.stroke();
 
-  // Perspective floor markings.
-  ctx.strokeStyle="#fff0d5";
-  ctx.lineWidth=3;
-
-  // Center line.
   ctx.beginPath();
   ctx.moveTo(450,390);
   ctx.lineTo(450,500);
   ctx.stroke();
 
-  // Center circle, shown as a floor ellipse.
   ctx.beginPath();
   ctx.ellipse(450,445,65,38,0,0,Math.PI*2);
   ctx.stroke();
 
-  // Left and right painted areas.
   ctx.fillStyle="#a94d35";
   ctx.fillRect(12,390,150,110);
   ctx.fillRect(738,390,150,110);
 
-  ctx.strokeStyle="#fff0d5";
   ctx.strokeRect(12,390,150,110);
   ctx.strokeRect(738,390,150,110);
 
-  // Free throw semicircles.
   ctx.beginPath();
   ctx.ellipse(162,445,50,38,0,-Math.PI/2,Math.PI/2);
   ctx.stroke();
@@ -268,7 +338,6 @@ function drawCourt(ctx) {
   ctx.ellipse(738,445,50,38,0,Math.PI/2,Math.PI*1.5);
   ctx.stroke();
 
-  // Three-point arcs, viewed from the side.
   ctx.beginPath();
   ctx.ellipse(80,445,260,175,0,-1.12,1.12);
   ctx.stroke();
@@ -277,7 +346,6 @@ function drawCourt(ctx) {
   ctx.ellipse(820,445,260,175,0,Math.PI-1.12,Math.PI+1.12);
   ctx.stroke();
 
-  // Corner three-point lines.
   ctx.beginPath();
   ctx.moveTo(12,390);
   ctx.lineTo(12,445);
@@ -285,26 +353,20 @@ function drawCourt(ctx) {
   ctx.lineTo(888,445);
   ctx.stroke();
 
-  // Center-court label.
   ctx.fillStyle="#ffffff25";
   ctx.font="900 25px Arial";
   ctx.textAlign="center";
   ctx.fillText("HOOP DUEL",450,485);
 }
 
-// BASKETS
-
 function drawBasket(ctx,x,direction) {
   ctx.save();
 
-  // Support pole.
   ctx.fillStyle="#303b49";
   ctx.fillRect(x-5,155,10,235);
 
-  // Base.
   roundedRect(ctx,x-22,380,44,10,4,"#29323c");
 
-  // Backboard support arm.
   ctx.strokeStyle="#303b49";
   ctx.lineWidth=9;
   ctx.beginPath();
@@ -312,19 +374,15 @@ function drawBasket(ctx,x,direction) {
   ctx.lineTo(x,198);
   ctx.stroke();
 
-  // Transparent backboard.
   ctx.fillStyle="#e8f0f4";
   ctx.fillRect(x-5,175,10,58);
   ctx.strokeStyle="#53616e";
   ctx.lineWidth=2;
   ctx.strokeRect(x-5,175,10,58);
 
-  // Target box.
   ctx.strokeStyle="#d75b38";
-  ctx.lineWidth=2;
   ctx.strokeRect(x-5,190,10,20);
 
-  // Rim.
   const rimX=x+direction*27;
   ctx.strokeStyle="#ed542d";
   ctx.lineWidth=5;
@@ -332,15 +390,16 @@ function drawBasket(ctx,x,direction) {
   ctx.ellipse(rimX,205,21,7,0,0,Math.PI*2);
   ctx.stroke();
 
-  // Net.
   ctx.strokeStyle="#f6f2e8";
   ctx.lineWidth=1.5;
+
   for(let i=-2;i<=2;i++) {
     ctx.beginPath();
     ctx.moveTo(rimX+i*7,211);
     ctx.lineTo(rimX+i*4,239);
     ctx.stroke();
   }
+
   for(let y=218;y<=235;y+=6) {
     ctx.beginPath();
     ctx.moveTo(rimX-14+(y-218)*.3,y);
@@ -351,25 +410,14 @@ function drawBasket(ctx,x,direction) {
   ctx.restore();
 }
 
-function roundedRect(ctx,x,y,w,h,r,color) {
-  ctx.fillStyle=color;
-  ctx.beginPath();
-  ctx.roundRect(x,y,w,h,r);
-  ctx.fill();
-}
-
-// PLAYER DRAWING
-
 function drawPlayer(ctx,p) {
-  const x=p.x;
-  const y=p.y;
+  const x=p.x,y=p.y;
   const blue=p.side===1;
   const jersey=blue?"#2462b6":"#c33b42";
   const shorts=blue?"#153b78":"#81262d";
   const skin="#bd8059";
   const facing=blue?1:-1;
 
-  // Floor shadow.
   ctx.save();
   ctx.globalAlpha=.25;
   ctx.fillStyle="#17120e";
@@ -378,13 +426,12 @@ function drawPlayer(ctx,p) {
   ctx.fill();
   ctx.restore();
 
-  // Legs.
+  const running=Math.abs(p.vx||0)>10;
+  const legSwing=running?Math.sin(performance.now()/75)*9:0;
+
   ctx.strokeStyle=skin;
   ctx.lineWidth=11;
   ctx.lineCap="round";
-
-  const running=Math.abs(p.vx||0)>10;
-  const legSwing=running?Math.sin(Date.now()/75)*9:0;
 
   ctx.beginPath();
   ctx.moveTo(x-7,y-34);
@@ -396,15 +443,11 @@ function drawPlayer(ctx,p) {
   ctx.lineTo(x+11-legSwing,y-7);
   ctx.stroke();
 
-  // Socks.
   roundedRect(ctx,x-17+legSwing,y-15,10,11,3,"#f4f1e8");
   roundedRect(ctx,x+7-legSwing,y-15,10,11,3,"#f4f1e8");
-
-  // Shoes.
   roundedRect(ctx,x-23+legSwing,y-8,19,9,4,"#20252d");
   roundedRect(ctx,x+5-legSwing,y-8,19,9,4,"#20252d");
 
-  // Shorts.
   ctx.fillStyle=shorts;
   ctx.beginPath();
   ctx.moveTo(x-16,y-58);
@@ -417,7 +460,6 @@ function drawPlayer(ctx,p) {
   ctx.closePath();
   ctx.fill();
 
-  // Jersey torso.
   ctx.fillStyle=jersey;
   ctx.beginPath();
   ctx.moveTo(x-13,y-94);
@@ -433,15 +475,14 @@ function drawPlayer(ctx,p) {
   ctx.lineWidth=2;
   ctx.stroke();
 
-  // Jersey number.
   ctx.fillStyle="white";
   ctx.font="bold 15px Arial";
   ctx.textAlign="center";
   ctx.fillText(blue?"1":"2",x,y-67);
 
-  // Arms.
   const dunk=p.action==="dunk";
   const shooting=p.action==="shoot";
+  const blocking=p.action==="block";
 
   ctx.strokeStyle=skin;
   ctx.lineWidth=9;
@@ -449,7 +490,8 @@ function drawPlayer(ctx,p) {
 
   ctx.beginPath();
   ctx.moveTo(x-facing*15,y-88);
-  if(dunk) {
+
+  if(dunk || blocking) {
     ctx.lineTo(x-facing*18,y-112);
     ctx.lineTo(x-facing*15,y-142);
   } else if(shooting) {
@@ -467,28 +509,22 @@ function drawPlayer(ctx,p) {
   ctx.lineTo(x+facing*26,y-59);
   ctx.stroke();
 
-  // Neck.
   ctx.fillStyle=skin;
   ctx.fillRect(x-5,y-103,10,12);
 
-  // Head.
   ctx.beginPath();
   ctx.ellipse(x,y-117,12,15,0,0,Math.PI*2);
   ctx.fill();
 
-  // Hair.
   ctx.fillStyle="#29201b";
   ctx.beginPath();
   ctx.arc(x,y-121,12,Math.PI,Math.PI*2);
   ctx.fill();
 
-  // Face.
-  ctx.fillStyle="#29201b";
   ctx.beginPath();
   ctx.arc(x+facing*6,y-117,1.5,0,Math.PI*2);
   ctx.fill();
 
-  // Name label.
   ctx.fillStyle="#fff";
   ctx.font="bold 13px Arial";
   ctx.textAlign="center";
@@ -498,11 +534,8 @@ function drawPlayer(ctx,p) {
   ctx.shadowBlur=0;
 }
 
-// BALL
-
 function drawBall(ctx,x,y) {
   const r=17;
-
   const gradient=ctx.createRadialGradient(x-7,y-8,2,x,y,r);
   gradient.addColorStop(0,"#ffbd5b");
   gradient.addColorStop(.65,"#ed741d");
@@ -545,33 +578,80 @@ function drawBall(ctx,x,y) {
   ctx.stroke();
 }
 
-// RENDER
+function lerp(a,b,t) {
+  return a+(b-a)*t;
+}
 
-function draw() {
-  if(!lastState) return;
+function animate() {
+  requestAnimationFrame(animate);
 
+  if(!targetState) return;
+
+  if(!displayState) {
+    displayState=JSON.parse(JSON.stringify(targetState));
+  }
+
+  const smooth=0.28;
+
+  displayState.players=targetState.players.map((target,index)=>{
+    const old=displayState.players[index]||target;
+    return {
+      ...target,
+      x:lerp(old.x,target.x,smooth),
+      y:lerp(old.y,target.y,smooth)
+    };
+  });
+
+  displayState.ball={
+    ...targetState.ball,
+    x:lerp(displayState.ball.x,targetState.ball.x,smooth),
+    y:lerp(displayState.ball.y,targetState.ball.y,smooth)
+  };
+
+  draw(displayState);
+}
+
+function draw(state) {
   const canvas=$("court");
   const ctx=canvas.getContext("2d");
 
   ctx.clearRect(0,0,900,500);
   drawCourt(ctx);
 
-  // Hoops behind players.
   drawBasket(ctx,50,1);
   drawBasket(ctx,850,-1);
 
-  // Players.
-  lastState.players.forEach(p=>drawPlayer(ctx,p));
+  state.players.forEach(p=>drawPlayer(ctx,p));
+  drawBall(ctx,state.ball.x,state.ball.y);
 
-  // Ball.
-  drawBall(ctx,lastState.ball.x,lastState.ball.y);
+  $("p1").textContent =
+    `${state.players[0]?.name||"P1"}: ${state.players[0]?.score||0}`;
 
-  $("p1").textContent=
-    `${lastState.players[0]?.name||"P1"}: ${lastState.players[0]?.score||0}`;
+  $("p2").textContent =
+    `${state.players[1]?.name||"P2"}: ${state.players[1]?.score||0}`;
 
-  $("p2").textContent=
-    `${lastState.players[1]?.name||"P2"}: ${lastState.players[1]?.score||0}`;
+  if(Date.now()<messageUntil) {
+    ctx.save();
+    ctx.textAlign="center";
+    ctx.font="900 30px Arial";
+    ctx.fillStyle="#fff";
+    ctx.shadowColor="#000";
+    ctx.shadowBlur=8;
+    ctx.fillText(jumpBallMessage,450,105);
+    ctx.restore();
+  } else if(state.jumpBall) {
+    ctx.save();
+    ctx.textAlign="center";
+    ctx.font="900 27px Arial";
+    ctx.fillStyle="#fff";
+    ctx.shadowColor="#000";
+    ctx.shadowBlur=8;
+    ctx.fillText("JUMP FOR THE BALL!",450,105);
+    ctx.restore();
+  }
 }
+
+requestAnimationFrame(animate);
 </script>
 </body>
 </html>
