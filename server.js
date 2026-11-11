@@ -135,37 +135,54 @@ function publicRoom(room, mySide = null) {
   };
 }
 
+// Each player receives their own state packet.
+// Both players can see when the other player is charging,
+// but only the shooter receives their charge value and shot meter flag.
 function emitState(room, now = Date.now()) {
   const clock = getClock(room, now);
 
-  io.to(room.code).emit("state", {
-    players: room.players.map(p => ({
-      name: p.name,
-      side: p.side,
-      x: p.x,
-      y: p.y,
-      vx: p.vx,
-      vy: p.vy,
-      score: p.score,
-      action: p.action,
-      stunned: p.stunnedUntil > now,
-      charging: p.shootStartedAt !== null,
-      charge: p.shootStartedAt === null
-        ? 0
-        : clamp((now - p.shootStartedAt) / 1000, 0, 1.2)
-    })),
-    ball: {
-      x: room.ball.x,
-      y: room.ball.y,
-      owner: room.ball.owner
-        ? room.players.find(p => p.id === room.ball.owner)?.side || null
-        : null,
-      dunking: room.ball.dunking,
-      pendingScore: !!room.ball.pendingScore
-    },
-    clock,
-    gameOver: !!room.gameOver
-  });
+  for (const viewer of room.players) {
+    io.to(viewer.id).emit("state", {
+      players: room.players.map(p => {
+        const isViewer = p.id === viewer.id;
+        const charging = p.shootStartedAt !== null;
+
+        return {
+          name: p.name,
+          side: p.side,
+          x: p.x,
+          y: p.y,
+          vx: p.vx,
+          vy: p.vy,
+          score: p.score,
+          action: p.action,
+          stunned: p.stunnedUntil > now,
+
+          // Public animation state: the opponent can see raised arms.
+          charging,
+
+          // Private timing data: only the shooter receives this.
+          showShotMeter: isViewer && charging,
+          charge: isViewer && charging
+            ? clamp((now - p.shootStartedAt) / 1000, 0, 1.2)
+            : 0
+        };
+      }),
+
+      ball: {
+        x: room.ball.x,
+        y: room.ball.y,
+        owner: room.ball.owner
+          ? room.players.find(p => p.id === room.ball.owner)?.side || null
+          : null,
+        dunking: room.ball.dunking,
+        pendingScore: !!room.ball.pendingScore
+      },
+
+      clock,
+      gameOver: !!room.gameOver
+    });
+  }
 }
 
 function startGame(room) {
@@ -211,8 +228,12 @@ function startGame(room) {
 function followHolder(ball, player) {
   const direction = player.side === 1 ? 1 : -1;
 
-  // During a pump fake, raise the held ball above the player's head.
-  if (player.action === "pumpFake") {
+  // Raise the ball during either a pump fake or a normal shot charge.
+  // The opponent sees the ball move, but not the shooter's timing meter.
+  if (
+    player.shootStartedAt !== null ||
+    player.action === "pumpFake"
+  ) {
     ball.x = player.x + direction * 15;
     ball.y = player.y - 190;
   } else {
