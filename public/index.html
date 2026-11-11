@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -336,8 +337,8 @@ canvas {
     </div>
 
     <div class="controls">
-      <span><strong>Player 1:</strong> A/D move · W jump · S pump fake</span>
-      <span><strong>Player 2:</strong> ←/→ move · ↑ jump · ↓ pump fake</span>
+      <span><strong>Player 1:</strong> A/D move · Double-tap A/D to dash · W jump · S pump fake</span>
+      <span><strong>Player 2:</strong> ←/→ move · Double-tap ←/→ to dash · ↑ jump · ↓ pump fake</span>
       <span><strong>Both:</strong> Hold/release Space to shoot · Shift to steal or stun</span>
       <span>Jump near the basket to dunk · Jump into a shot to block</span>
     </div>
@@ -360,6 +361,47 @@ let message = "";
 let messageUntil = 0;
 
 const keys = {};
+
+// DASH INPUT SETTINGS
+const DOUBLE_TAP_WINDOW = 260;
+
+const lastDirectionTap = {
+  left: 0,
+  right: 0
+};
+
+function handleDashTap(key) {
+  if (!started) return;
+
+  let direction = null;
+
+  if (mySide === 1) {
+    if (key === "a") direction = -1;
+    if (key === "d") direction = 1;
+  } else if (mySide === 2) {
+    if (key === "arrowleft") direction = -1;
+    if (key === "arrowright") direction = 1;
+  }
+
+  if (direction === null) return;
+
+  const now = performance.now();
+  const side = direction === -1 ? "left" : "right";
+
+  if (
+    lastDirectionTap[side] !== 0 &&
+    now - lastDirectionTap[side] <= DOUBLE_TAP_WINDOW
+  ) {
+    // Consume the pair so a third tap starts a new sequence.
+    lastDirectionTap[side] = 0;
+
+    socket.emit("dash", {
+      direction
+    });
+  } else {
+    lastDirectionTap[side] = now;
+  }
+}
 
 $("create").onclick = () => {
   socket.emit("createRoom", {
@@ -444,6 +486,9 @@ socket.on("gameStarted", () => {
   targetState = null;
   displayState = null;
 
+  lastDirectionTap.left = 0;
+  lastDirectionTap.right = 0;
+
   announce("GET READY!");
 });
 
@@ -522,7 +567,12 @@ window.addEventListener("keydown", e => {
 
   if (e.repeat) return;
 
-  keys[e.key.toLowerCase()] = true;
+  const key = e.key.toLowerCase();
+
+  // Detect a double tap before updating the held-key state.
+  handleDashTap(key);
+
+  keys[key] = true;
   sendInput();
 });
 
@@ -535,6 +585,9 @@ window.addEventListener("blur", () => {
   for (const key in keys) {
     keys[key] = false;
   }
+
+  lastDirectionTap.left = 0;
+  lastDirectionTap.right = 0;
 
   sendInput();
 });
@@ -776,7 +829,6 @@ function drawFloor(ctx) {
   ctx.stroke();
 
   // Original oversized three-point arcs.
-  // Their large sweep intentionally extends past the court edges.
   ctx.beginPath();
   ctx.ellipse(
     90, centerY, 335, 220,
@@ -850,7 +902,7 @@ function drawHoop(ctx, x, direction) {
   ctx.stroke();
   ctx.restore();
 
-  // Wider net, without making it excessively long.
+  // Wider net.
   ctx.strokeStyle = "#f4eee4";
   ctx.lineWidth = 1.7;
 
@@ -879,7 +931,6 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  // Thick ink-like outline.
   ctx.strokeStyle = outline;
   ctx.lineWidth = width + 5;
   ctx.beginPath();
@@ -890,7 +941,6 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   }
   ctx.stroke();
 
-  // Colored limb.
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.beginPath();
@@ -901,7 +951,6 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   }
   ctx.stroke();
 
-  // Rounded joints.
   for (const [x, y] of points) {
     ctx.fillStyle = outline;
     ctx.beginPath();
@@ -935,7 +984,6 @@ function drawPlayer(ctx, p, time) {
   const bob = running ? Math.abs(Math.sin(time * .018)) * 2 : 0;
   const bodyY = y - bob;
 
-  // Exaggerated basketball caricature proportions.
   const shoulder = 28;
   const headWidth = 35;
   const headHeight = 40;
@@ -983,7 +1031,6 @@ function drawPlayer(ctx, p, time) {
   let nearArm;
   let farArm;
 
-  // Both pump fakes and normal shot charging raise the arms.
   if (pumpFaking || charging) {
     nearArm = [
       [x - face * 22, bodyY - 108],
@@ -1033,7 +1080,7 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, farArm, 11, skin, outline);
   drawLimb(ctx, nearArm, 12, skin, outline);
 
-  // Shorts with dark comic outline.
+  // Shorts.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1071,7 +1118,7 @@ function drawPlayer(ctx, p, time) {
   ctx.stroke();
   ctx.restore();
 
-  // Jersey outer silhouette.
+  // Jersey.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1107,7 +1154,6 @@ function drawPlayer(ctx, p, time) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Uniform piping and jersey number.
   ctx.strokeStyle = trim;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -1128,7 +1174,7 @@ function drawPlayer(ctx, p, time) {
   // Neck.
   rounded(ctx, x - 9, bodyY - 135, 18, 20, 5, skin);
 
-  // Ears with outlines.
+  // Ears.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x - face * 34, headY - 2, 10, 15, 0, 0, Math.PI * 2);
@@ -1141,7 +1187,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 34, headY - 2, 7, 12, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Huge head silhouette and shaded face.
+  // Head.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x, headY, headWidth + 3, headHeight + 3, 0, 0, Math.PI * 2);
@@ -1160,7 +1206,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x, headY, headWidth, headHeight, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Same cropped haircut, beard, and headband on both players.
+  // Hair and beard.
   ctx.fillStyle = "#211a19";
   ctx.beginPath();
   ctx.ellipse(x, headY - 25, headWidth - 1, 17, 0, Math.PI, Math.PI * 2);
@@ -1184,7 +1230,7 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x, headY - 12, x + 30, headY - 19);
   ctx.stroke();
 
-  // Expressive eyebrows.
+  // Eyebrows.
   ctx.strokeStyle = "#30201b";
   ctx.lineWidth = 6;
   ctx.lineCap = "round";
@@ -1195,7 +1241,7 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x + 16, headY - 23, x + 26, headY - 12);
   ctx.stroke();
 
-  // Large eyes.
+  // Eyes.
   for (const side of [-1, 1]) {
     const eyeX = x + side * 14;
     const eyeY = headY - 3;
@@ -1222,7 +1268,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x - face * 2, headY + 7, 7, 7, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Big expressive smile and teeth.
+  // Smile and teeth.
   ctx.fillStyle = "#241217";
   ctx.beginPath();
   ctx.ellipse(x + face * 2, headY + 25, 23, 13, 0, 0, Math.PI * 2);
@@ -1238,7 +1284,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 2, headY + 32, 13, 5, 0, 0, Math.PI);
   ctx.fill();
 
-  // Player name above the caricature.
+  // Player name.
   ctx.save();
   ctx.font = "900 14px Arial";
   ctx.textAlign = "center";
@@ -1263,7 +1309,7 @@ function drawPlayer(ctx, p, time) {
     ctx.restore();
   }
 
-  // The server only sends showShotMeter=true to the shooter.
+  // Only the shooter receives the shot meter.
   if (p.showShotMeter && p.side === mySide) {
     drawShotMeter(
       ctx,
@@ -1310,7 +1356,6 @@ function drawShotMeter(ctx, x, y, charge) {
 
   rounded(ctx, left, y, w, h, 5, gradient);
 
-  // Smoothly interpolated release indicator.
   ctx.fillStyle = "#fff";
   ctx.fillRect(
     left + w * normalized - 2,
@@ -1428,13 +1473,11 @@ function drawJumpBallCountdown(ctx, count) {
 
   ctx.save();
 
-  // Dark circular background.
   ctx.fillStyle = "#08111fdd";
   ctx.beginPath();
   ctx.arc(600, 270, 68, 0, Math.PI * 2);
   ctx.fill();
 
-  // Amber outline and glow.
   ctx.shadowColor = "#ffc36e";
   ctx.shadowBlur = 22;
   ctx.strokeStyle = "#ffc36e";
@@ -1476,7 +1519,6 @@ function animate(now) {
     });
   }
 
-  // Interpolate positions between 30 FPS server snapshots.
   const smooth = 1 - Math.exp(-dt * 18);
 
   displayState.players = targetState.players.map((target, index) => {
@@ -1537,7 +1579,6 @@ function draw(state, time) {
     time
   );
 
-  // Synchronized jump-ball countdown from the server.
   drawJumpBallCountdown(ctx, state.clock?.jumpBallCountdown);
 
   const p1 = state.players.find(p => p.side === 1);
