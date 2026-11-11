@@ -1,3 +1,4 @@
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -189,12 +190,12 @@ function startGame(room) {
     p.stunnedUntil = 0;
   });
 
-  // Higher opening ball for the tip-off contest.
+  // Raised opening ball for a higher tip-off contest.
   room.ball = createBall();
   room.ball.x = 600;
-  room.ball.y = 235;
+  room.ball.y = 165;
   room.ball.previousX = 600;
-  room.ball.previousY = 235;
+  room.ball.previousY = 165;
   room.ball.vx = 0;
   room.ball.vy = 0;
 
@@ -312,11 +313,13 @@ function tryPickupBall(room) {
     Date.now() < ball.pickupLockoutUntil
   ) return;
 
+  // Compare the ball to the player's upper-body reach.
+  // This lets a jumping player contest the raised tip-off.
   const nearest = room.players.map(player => ({
     player,
     distance: Math.hypot(
       player.x - ball.x,
-      (player.y - 48) - ball.y
+      (player.y - 110) - ball.y
     )
   })).sort((a, b) => a.distance - b.distance)[0];
 
@@ -554,7 +557,7 @@ function scoreBasket(room, scorer, points) {
   room.ball.owner = null;
   room.ball.shotBySide = null;
 
-  // Let the ball fall through the hoop before changing possession.
+  // Let the ball fall through the net before changing possession.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
@@ -685,7 +688,6 @@ function updateGameClock(room, now) {
     return;
   }
 
-  // Tied games receive another 15-second overtime.
   room.overtime += 1;
   room.periodEndsAt = now + OVERTIME_MS;
 
