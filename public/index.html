@@ -977,12 +977,14 @@ function drawPlayer(ctx, p, time) {
   // Arm poses.
   const shooting = p.action === "shoot";
   const pumpFaking = p.action === "pumpFake";
+  const charging = !!p.charging;
   const jumping = p.action === "dunk" || p.action === "block";
 
   let nearArm;
   let farArm;
 
-  if (pumpFaking) {
+  // Both pump fakes and normal shot charging raise the arms.
+  if (pumpFaking || charging) {
     nearArm = [
       [x - face * 22, bodyY - 108],
       [x - face * 27, bodyY - 145],
@@ -1261,8 +1263,14 @@ function drawPlayer(ctx, p, time) {
     ctx.restore();
   }
 
-  if (p.charging) {
-    drawShotMeter(ctx, x, headY - 62, p.displayCharge ?? p.charge);
+  // The server only sends showShotMeter=true to the shooter.
+  if (p.showShotMeter && p.side === mySide) {
+    drawShotMeter(
+      ctx,
+      x,
+      headY - 62,
+      p.displayCharge ?? p.charge
+    );
   }
 }
 
