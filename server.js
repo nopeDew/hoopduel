@@ -182,7 +182,7 @@ function startGame(room) {
   room.players.forEach((p, index) => {
     p.score = 0;
     p.ready = false;
-    p.x = index === 0 ? 570 : 630;
+    p.x = index === 0 ? 530 : 670;
     p.y = COURT.floor;
     p.vx = 0;
     p.vy = 0;
@@ -279,10 +279,18 @@ function movePlayer(p, dt) {
     p.y = COURT.floor;
     p.vy = 0;
 
-    if (!p.dunking && p.action !== "shoot") {
+    if (
+      !p.dunking &&
+      p.action !== "shoot" &&
+      p.action !== "pumpFake"
+    ) {
       p.action = "idle";
     }
-  } else if (!p.dunking && p.action !== "shoot") {
+  } else if (
+    !p.dunking &&
+    p.action !== "shoot" &&
+    p.action !== "pumpFake"
+  ) {
     p.action = "jump";
   }
 }
@@ -781,13 +789,7 @@ io.on("connection", socket => {
 
   socket.on("input", input => {
     const room = rooms.get(socket.data.room);
-
-    // Block all input until the jump-ball countdown finishes.
-    if (
-      !room ||
-      !room.started ||
-      Date.now() < room.jumpBallStartsAt
-    ) return;
+    if (!room || !room.started || Date.now() < room.jumpBallStartsAt) return;
 
     const p = room.players.find(
       player => player.id === socket.id
@@ -818,10 +820,6 @@ io.on("connection", socket => {
       p.lastPumpFakeAt = now;
       p.action = "pumpFake";
       p.actionUntil = now + 500;
-
-      io.to(room.code).emit("pumpFaked", {
-        player: p.name
-      });
     }
 
     if (
