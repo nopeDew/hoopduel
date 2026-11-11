@@ -339,7 +339,7 @@ canvas {
       <span><strong>Player 1:</strong> A/D move · Double-tap A/D to dash · W jump · S pump fake</span>
       <span><strong>Player 2:</strong> ←/→ move · Double-tap ←/→ to dash · ↑ jump · ↓ pump fake</span>
       <span><strong>Both:</strong> Hold/release Space to shoot · Shift to steal or stun</span>
-      <span>Jump near the basket to dunk · Jump into a shot to block</span>
+      <span>Jump during the opening toss to contest the ball · Jump near the basket to dunk · Jump into a shot to block</span>
     </div>
 
     <button id="returnLobby" class="hidden">BACK TO LOBBY / REMATCH</button>
@@ -391,7 +391,6 @@ function handleDashTap(key) {
     lastDirectionTap[side] !== 0 &&
     now - lastDirectionTap[side] <= DOUBLE_TAP_WINDOW
   ) {
-    // Consume the pair so a third tap starts a new sequence.
     lastDirectionTap[side] = 0;
 
     socket.emit("dash", {
@@ -568,7 +567,6 @@ window.addEventListener("keydown", e => {
 
   const key = e.key.toLowerCase();
 
-  // Detect a double tap before updating the held-key state.
   handleDashTap(key);
 
   keys[key] = true;
@@ -646,7 +644,6 @@ function drawArena(ctx, time) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1200, 470);
 
-  // Dark rafters.
   const roof = ctx.createLinearGradient(0, 0, 0, 100);
   roof.addColorStop(0, "#050a12");
   roof.addColorStop(1, "#1b2a3c");
@@ -663,7 +660,6 @@ function drawArena(ctx, time) {
     ctx.stroke();
   }
 
-  // Stylized crowd seating.
   const crowdColors = [
     "#d45c53", "#e1b66c", "#577eac",
     "#d9dce2", "#438d78", "#8b6db2"
@@ -689,7 +685,6 @@ function drawArena(ctx, time) {
     }
   }
 
-  // LED ribbon board.
   const ribbon = ctx.createLinearGradient(0, 0, 1200, 0);
   ribbon.addColorStop(0, "#142c44");
   ribbon.addColorStop(.5, "#244d67");
@@ -707,7 +702,6 @@ function drawArena(ctx, time) {
   ctx.textAlign = "center";
   ctx.fillText("HOOP DUEL  •  HOME COURT  •  HOOP DUEL", 600, 283);
 
-  // Arena panels.
   for (const x of [60, 280, 500, 720, 940, 1160]) {
     const board = ctx.createLinearGradient(x - 50, 0, x + 50, 0);
     board.addColorStop(0, "#14334c");
@@ -726,7 +720,6 @@ function drawArena(ctx, time) {
     ctx.fillText("HD", x, 329);
   }
 
-  // Spotlights.
   for (const x of [120, 360, 600, 840, 1080]) {
     const beam = ctx.createRadialGradient(x, 65, 3, x, 220, 190);
     beam.addColorStop(0, "#fff3cf4b");
@@ -757,7 +750,6 @@ function drawFloor(ctx) {
   ctx.fillStyle = wood;
   ctx.fillRect(0, floorTop, 1200, floorHeight);
 
-  // Hardwood planks.
   for (let y = floorTop + 5; y < floorBottom; y += 23) {
     const row = Math.floor((y - floorTop) / 23);
 
@@ -781,23 +773,19 @@ function drawFloor(ctx) {
   ctx.fillStyle = shine;
   ctx.fillRect(0, floorTop, 1200, floorHeight);
 
-  // Full hardwood court boundary.
   ctx.strokeStyle = "#fff0d5";
   ctx.lineWidth = 3;
   ctx.strokeRect(1.5, floorTop + 1.5, 1197, floorHeight - 3);
 
-  // Full-height center line.
   ctx.beginPath();
   ctx.moveTo(600, floorTop);
   ctx.lineTo(600, floorBottom);
   ctx.stroke();
 
-  // Center circle.
   ctx.beginPath();
   ctx.ellipse(600, centerY, 83, 91, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Painted keys fill the full hardwood height.
   const key = ctx.createLinearGradient(0, floorTop, 0, floorBottom);
   key.addColorStop(0, "#a54c39");
   key.addColorStop(1, "#8d3d32");
@@ -806,13 +794,11 @@ function drawFloor(ctx) {
   ctx.fillRect(0, floorTop, 205, floorHeight);
   ctx.fillRect(995, floorTop, 205, floorHeight);
 
-  // Key boundaries.
   ctx.strokeStyle = "#fff0d5";
   ctx.lineWidth = 3;
   ctx.strokeRect(0, floorTop, 205, floorHeight);
   ctx.strokeRect(995, floorTop, 205, floorHeight);
 
-  // Free-throw arcs enlarged to the full court height.
   ctx.beginPath();
   ctx.ellipse(
     205, centerY, 67, 91,
@@ -827,7 +813,6 @@ function drawFloor(ctx) {
   );
   ctx.stroke();
 
-  // Original oversized three-point arcs.
   ctx.beginPath();
   ctx.ellipse(
     90, centerY, 335, 220,
@@ -842,7 +827,6 @@ function drawFloor(ctx) {
   );
   ctx.stroke();
 
-  // Center-court branding.
   ctx.save();
   ctx.globalAlpha = .17;
   ctx.fillStyle = "#fff";
@@ -864,7 +848,6 @@ function drawHoop(ctx, x, direction) {
   ctx.fillRect(x - 9, 130, 18, 340);
   rounded(ctx, x - 31, 457, 62, 13, 5, "#252e39");
 
-  // Backboard support.
   ctx.strokeStyle = "#293745";
   ctx.lineWidth = 12;
   ctx.beginPath();
@@ -872,7 +855,6 @@ function drawHoop(ctx, x, direction) {
   ctx.lineTo(x, 183);
   ctx.stroke();
 
-  // Backboard.
   const glass = ctx.createLinearGradient(x - 6, 0, x + 7, 0);
   glass.addColorStop(0, "#dcecf2");
   glass.addColorStop(.5, "#ffffff");
@@ -890,7 +872,6 @@ function drawHoop(ctx, x, direction) {
 
   const rimX = x + direction * 34;
 
-  // Wider rim.
   ctx.save();
   ctx.shadowColor = "#ff6a35";
   ctx.shadowBlur = 13;
@@ -901,7 +882,6 @@ function drawHoop(ctx, x, direction) {
   ctx.stroke();
   ctx.restore();
 
-  // Wider net.
   ctx.strokeStyle = "#f4eee4";
   ctx.lineWidth = 1.7;
 
@@ -988,7 +968,6 @@ function drawPlayer(ctx, p, time) {
   const headHeight = 40;
   const headY = bodyY - 145;
 
-  // Ground shadow.
   ctx.save();
   ctx.globalAlpha = clamp(1 - (470 - y) / 250, .2, .4);
   ctx.fillStyle = "#120e0b";
@@ -997,7 +976,6 @@ function drawPlayer(ctx, p, time) {
   ctx.fill();
   ctx.restore();
 
-  // Legs.
   const leftHip = [x - 9, bodyY - 42];
   const rightHip = [x + 9, bodyY - 42];
   const leftKnee = [x - 15 + stride * .5, bodyY - 24];
@@ -1008,7 +986,6 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, [leftHip, leftKnee, leftFoot], 11, dark, outline);
   drawLimb(ctx, [rightHip, rightKnee, rightFoot], 11, dark, outline);
 
-  // Socks and oversized sneakers.
   rounded(ctx, leftFoot[0] - 5, bodyY - 20, 11, 11, 3, "#f8f5ef");
   rounded(ctx, rightFoot[0] - 5, bodyY - 20, 11, 11, 3, "#f8f5ef");
 
@@ -1021,7 +998,6 @@ function drawPlayer(ctx, p, time) {
   rounded(ctx, rightFoot[0] - 8, bodyY - 5, 27, 4, 2, main);
   ctx.restore();
 
-  // Arm poses.
   const shooting = p.action === "shoot";
   const pumpFaking = p.action === "pumpFake";
   const charging = !!p.charging;
@@ -1079,7 +1055,6 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, farArm, 11, skin, outline);
   drawLimb(ctx, nearArm, 12, skin, outline);
 
-  // Shorts.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1117,7 +1092,6 @@ function drawPlayer(ctx, p, time) {
   ctx.stroke();
   ctx.restore();
 
-  // Jersey.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1170,10 +1144,8 @@ function drawPlayer(ctx, p, time) {
   ctx.fillText("23", x, bodyY - 82);
   ctx.restore();
 
-  // Neck.
   rounded(ctx, x - 9, bodyY - 135, 18, 20, 5, skin);
 
-  // Ears.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x - face * 34, headY - 2, 10, 15, 0, 0, Math.PI * 2);
@@ -1186,7 +1158,6 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 34, headY - 2, 7, 12, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Head.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x, headY, headWidth + 3, headHeight + 3, 0, 0, Math.PI * 2);
@@ -1205,7 +1176,6 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x, headY, headWidth, headHeight, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Hair and beard.
   ctx.fillStyle = "#211a19";
   ctx.beginPath();
   ctx.ellipse(x, headY - 25, headWidth - 1, 17, 0, Math.PI, Math.PI * 2);
@@ -1229,7 +1199,6 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x, headY - 12, x + 30, headY - 19);
   ctx.stroke();
 
-  // Eyebrows.
   ctx.strokeStyle = "#30201b";
   ctx.lineWidth = 6;
   ctx.lineCap = "round";
@@ -1240,7 +1209,6 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x + 16, headY - 23, x + 26, headY - 12);
   ctx.stroke();
 
-  // Eyes.
   for (const side of [-1, 1]) {
     const eyeX = x + side * 14;
     const eyeY = headY - 3;
@@ -1256,7 +1224,6 @@ function drawPlayer(ctx, p, time) {
     ctx.fill();
   }
 
-  // Nose.
   ctx.fillStyle = "#75452f";
   ctx.beginPath();
   ctx.ellipse(x + face * 2, headY + 10, 11, 12, 0, 0, Math.PI * 2);
@@ -1267,7 +1234,6 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x - face * 2, headY + 7, 7, 7, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Smile and teeth.
   ctx.fillStyle = "#241217";
   ctx.beginPath();
   ctx.ellipse(x + face * 2, headY + 25, 23, 13, 0, 0, Math.PI * 2);
@@ -1283,7 +1249,6 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 2, headY + 32, 13, 5, 0, 0, Math.PI);
   ctx.fill();
 
-  // Player name.
   ctx.save();
   ctx.font = "900 14px Arial";
   ctx.textAlign = "center";
@@ -1308,7 +1273,6 @@ function drawPlayer(ctx, p, time) {
     ctx.restore();
   }
 
-  // Only the shooter receives the shot meter.
   if (p.showShotMeter && p.side === mySide) {
     drawShotMeter(
       ctx,
