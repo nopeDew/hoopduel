@@ -1,4 +1,3 @@
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -544,7 +543,7 @@ function scoreBasket(room, scorer, points) {
   room.ball.shotBySide = null;
 
   // Put the ball just above the rim, then let it visibly fall
-  // through the extended net before possession changes.
+  // through the net before possession changes.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
@@ -597,7 +596,7 @@ function checkBasket(room) {
   let scorer = null;
 
   if (
-    Math.abs(crossingX - COURT.rightHoop) < 24 &&
+    Math.abs(crossingX - COURT.rightHoop) < 30 &&
     ball.vx > 0 &&
     ball.shotBySide === 1
   ) {
@@ -605,7 +604,7 @@ function checkBasket(room) {
   }
 
   if (
-    Math.abs(crossingX - COURT.leftHoop) < 24 &&
+    Math.abs(crossingX - COURT.leftHoop) < 30 &&
     ball.vx < 0 &&
     ball.shotBySide === 2
   ) {
