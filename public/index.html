@@ -5,94 +5,289 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HOOP DUEL</title>
-<style>
-*{box-sizing:border-box}
-body{
-  margin:0;min-height:100vh;display:grid;place-items:center;
-  background:radial-gradient(ellipse at 50% 0%,#344d70 0%,#131e30 55%,#080d17 100%);
-  color:#f6f7fb;font-family:Inter,system-ui,Arial,sans-serif
-}
-.wrap{width:min(1500px,99vw);padding:14px}
-.brand{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-h1{font-size:clamp(25px,3vw,40px);letter-spacing:4px;margin:0;font-weight:950}
-.tag{color:#ffbd65;font-size:12px;font-weight:900;letter-spacing:3px}
-.panel{
-  background:linear-gradient(145deg,#1d2a40,#111b2b);
-  border:1px solid #465774;border-radius:20px;padding:20px;
-  box-shadow:0 24px 80px #0008,inset 0 1px #ffffff12
-}
-#lobby{max-width:600px;margin:auto}
-input,button{border:0;border-radius:11px;padding:13px 15px;font:inherit}
-input{background:#0c1524;color:white;border:1px solid #43536b;min-width:0;flex:1}
-button{background:linear-gradient(135deg,#ffd078,#ff922f);color:#291805;font-weight:900;cursor:pointer}
-button.secondary{background:#354762;color:white}
-button:disabled{opacity:.5;cursor:not-allowed}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-#status{min-height:25px;color:#ffca83;margin:13px 0}
-.hidden{display:none!important}
-.code{font-size:30px;letter-spacing:6px;color:#ffc36e;font-weight:950}
-.players{color:#d1d9e6;margin:14px 0}
 
-#game{
-  margin-top:10px;padding:14px;
-  position:relative;overflow:hidden
+<style>
+* {
+  box-sizing: border-box;
 }
-.game-top{
-  display:flex;justify-content:space-between;align-items:center;
-  gap:12px;margin:0 2px 10px
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    #344d70 0%,
+    #131e30 55%,
+    #080d17 100%
+  );
+  color: #f6f7fb;
+  font-family: Inter, system-ui, Arial, sans-serif;
 }
-.hud{
-  display:flex;justify-content:space-between;align-items:center;
-  gap:12px;flex:1;font-weight:950
+
+.wrap {
+  width: min(1500px, 99vw);
+  padding: 14px;
 }
-.hud span:nth-child(2){
-  color:#ffc16c;font-size:12px;letter-spacing:2px;white-space:nowrap
+
+.brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
 }
-#fullscreen{
-  padding:9px 13px;background:#354762;color:#fff;
-  border:1px solid #60718b;font-size:12px
+
+h1 {
+  font-size: clamp(25px, 3vw, 40px);
+  letter-spacing: 4px;
+  margin: 0;
+  font-weight: 950;
 }
-.canvas-wrap{
-  position:relative;width:100%;overflow:hidden;border-radius:13px;
-  background:#9b6338
+
+.tag {
+  color: #ffbd65;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 3px;
 }
-canvas{
-  width:100%;height:auto;display:block;
-  border:2px solid #bd9663;border-radius:13px;
-  background:#9b6338;touch-action:none
+
+.panel {
+  background: linear-gradient(145deg, #1d2a40, #111b2b);
+  border: 1px solid #465774;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 24px 80px #0008, inset 0 1px #ffffff12;
 }
-.controls{
-  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
-  font-size:12px;color:#c0cddd;line-height:1.7;margin:10px 4px 0
+
+#lobby {
+  max-width: 600px;
+  margin: auto;
 }
-.controls strong{color:#fff}
-#game:fullscreen{
-  width:100vw;height:100vh;margin:0;padding:12px;border-radius:0;
-  display:flex;flex-direction:column;background:#0b1422;
-  border:0
+
+input,
+button {
+  border: 0;
+  border-radius: 11px;
+  padding: 13px 15px;
+  font: inherit;
 }
-#game:fullscreen .game-top{flex:none}
-#game:fullscreen .canvas-wrap{
-  flex:1;min-height:0;display:flex;align-items:center;justify-content:center
+
+input {
+  background: #0c1524;
+  color: white;
+  border: 1px solid #43536b;
+  min-width: 0;
+  flex: 1;
 }
-#game:fullscreen canvas{
-  width:auto;height:auto;max-width:100%;max-height:100%;
-  object-fit:contain
+
+button {
+  background: linear-gradient(135deg, #ffd078, #ff922f);
+  color: #291805;
+  font-weight: 900;
+  cursor: pointer;
 }
-#game:fullscreen .controls{flex:none;margin-top:8px}
-@media(max-width:650px){
-  .wrap{padding:6px}.panel{padding:10px}
-  .brand{align-items:flex-start;gap:8px;flex-direction:column}
-  .game-top{align-items:flex-start}
-  .hud{font-size:11px;gap:5px}
-  .hud span:nth-child(2){font-size:9px}
-  .controls{font-size:10px}
-  #fullscreen{font-size:10px;padding:8px}
+
+button.secondary {
+  background: #354762;
+  color: white;
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#status {
+  min-height: 25px;
+  color: #ffca83;
+  margin: 13px 0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.code {
+  font-size: 30px;
+  letter-spacing: 6px;
+  color: #ffc36e;
+  font-weight: 950;
+}
+
+.players {
+  color: #d1d9e6;
+  margin: 14px 0;
+}
+
+#game {
+  margin-top: 10px;
+  padding: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.game-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 0 2px 10px;
+}
+
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  font-weight: 950;
+}
+
+#clock {
+  color: #ffc16c;
+  font-size: 17px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+#fullscreen {
+  padding: 9px 13px;
+  background: #354762;
+  color: #fff;
+  border: 1px solid #60718b;
+  font-size: 12px;
+}
+
+.canvas-wrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 13px;
+  background: #9b6338;
+}
+
+canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 2px solid #bd9663;
+  border-radius: 13px;
+  background: #9b6338;
+  touch-action: none;
+}
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #c0cddd;
+  line-height: 1.7;
+  margin: 10px 4px 0;
+}
+
+.controls strong {
+  color: #fff;
+}
+
+#returnLobby {
+  margin-top: 12px;
+}
+
+/* Fullscreen uses a dark canvas surround and hides the instructions. */
+#game:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 12px;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  background: #080f1b;
+  border: 0;
+}
+
+#game:fullscreen .game-top {
+  flex: none;
+}
+
+#game:fullscreen .canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #080f1b;
+  border-radius: 0;
+}
+
+#game:fullscreen canvas {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border: 0;
+  border-radius: 0;
+  background: #080f1b;
+}
+
+#game:fullscreen .controls {
+  display: none;
+}
+
+@media (max-width: 650px) {
+  .wrap {
+    padding: 6px;
+  }
+
+  .panel {
+    padding: 10px;
+  }
+
+  .brand {
+    align-items: flex-start;
+    gap: 8px;
+    flex-direction: column;
+  }
+
+  .game-top {
+    align-items: flex-start;
+  }
+
+  .hud {
+    font-size: 11px;
+    gap: 5px;
+  }
+
+  #clock {
+    font-size: 12px;
+  }
+
+  .controls {
+    font-size: 10px;
+  }
+
+  #fullscreen {
+    font-size: 10px;
+    padding: 8px;
+  }
 }
 </style>
 </head>
+
 <body>
 <main class="wrap">
+
   <div class="brand">
     <h1>🏀 HOOP DUEL</h1>
     <span class="tag">ONLINE • HEAD TO HEAD</span>
@@ -102,15 +297,21 @@ canvas{
     <p style="color:#c7d3e3;margin-top:0">
       Create a private court, invite your opponent, and take over the hardwood.
     </p>
+
     <input id="name" maxlength="14" placeholder="Your player name" value="Player">
+
     <div class="row" style="margin-top:12px">
       <button id="create">CREATE COURT</button>
       <input id="roomCode" maxlength="6" placeholder="ROOM CODE" style="text-transform:uppercase">
       <button class="secondary" id="join">JOIN COURT</button>
     </div>
+
     <div id="status">Create a room or enter your friend's code.</div>
+
     <div id="roomInfo" class="hidden">
-      <div style="font-size:12px;letter-spacing:2px;color:#c2ccdc">YOUR ROOM CODE</div>
+      <div style="font-size:12px;letter-spacing:2px;color:#c2ccdc">
+        YOUR ROOM CODE
+      </div>
       <div class="code" id="codeText"></div>
       <div class="players" id="players"></div>
       <button id="ready">I'M READY</button>
@@ -121,9 +322,10 @@ canvas{
     <div class="game-top">
       <div class="hud">
         <span id="p1">PLAYER 1: 0</span>
-        <span>FIRST TO 10</span>
+        <span id="clock">01:00</span>
         <span id="p2">PLAYER 2: 0</span>
       </div>
+
       <button id="fullscreen">⛶ FULLSCREEN</button>
     </div>
 
@@ -137,672 +339,1055 @@ canvas{
       <span><strong>Both:</strong> Hold/release Space to shoot · Shift to steal or stun</span>
       <span>Jump near the basket to dunk · Jump into a shot to block</span>
     </div>
+
+    <button id="returnLobby" class="hidden">BACK TO LOBBY / REMATCH</button>
   </section>
+
 </main>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-const socket=io();
-const $=id=>document.getElementById(id);
+const socket = io();
+const $ = id => document.getElementById(id);
 
-let mySide=0;
-let started=false;
-let targetState=null;
-let displayState=null;
-let message="";
-let messageUntil=0;
-const keys={};
+let mySide = 0;
+let started = false;
+let targetState = null;
+let displayState = null;
+let message = "";
+let messageUntil = 0;
 
-$("create").onclick=()=>socket.emit("createRoom",{name:$("name").value});
-$("join").onclick=()=>socket.emit("joinRoom",{
-  name:$("name").value,
-  code:$("roomCode").value
-});
+const keys = {};
 
-$("ready").onclick=()=>{
-  socket.emit("ready");
-  $("ready").disabled=true;
-  $("status").textContent="Waiting for your opponent...";
+$("create").onclick = () => {
+  socket.emit("createRoom", {
+    name: $("name").value
+  });
 };
 
-$("fullscreen").onclick=async()=>{
-  try{
-    if(!document.fullscreenElement){
+$("join").onclick = () => {
+  socket.emit("joinRoom", {
+    name: $("name").value,
+    code: $("roomCode").value
+  });
+};
+
+$("ready").onclick = () => {
+  socket.emit("ready");
+  $("ready").disabled = true;
+  $("status").textContent = "Waiting for your opponent...";
+};
+
+$("returnLobby").onclick = () => {
+  $("game").classList.add("hidden");
+  $("lobby").classList.remove("hidden");
+  $("ready").disabled = false;
+  $("returnLobby").classList.add("hidden");
+  $("status").textContent = "Ready for another game.";
+};
+
+$("fullscreen").onclick = async () => {
+  try {
+    if (!document.fullscreenElement) {
       await $("game").requestFullscreen();
-    }else{
+    } else {
       await document.exitFullscreen();
     }
-  }catch(error){
+  } catch (error) {
     announce("FULLSCREEN NOT AVAILABLE");
   }
 };
 
-document.addEventListener("fullscreenchange",()=>{
-  $("fullscreen").textContent=document.fullscreenElement
-    ?"⛶ EXIT FULLSCREEN"
-    :"⛶ FULLSCREEN";
+document.addEventListener("fullscreenchange", () => {
+  $("fullscreen").textContent = document.fullscreenElement
+    ? "⛶ EXIT FULLSCREEN"
+    : "⛶ FULLSCREEN";
 });
 
-socket.on("roomJoined",room=>{
-  mySide=room.players.find(p=>p.name===$("name").value)?.side||room.players.length;
+socket.on("roomJoined", room => {
+  mySide = room.mySide || 1;
+
   $("roomInfo").classList.remove("hidden");
-  $("codeText").textContent=room.code;
-  $("status").textContent="Room ready. Share the code with your opponent.";
+  $("codeText").textContent = room.code;
+  $("status").textContent = "Room ready. Share the code with your opponent.";
+
   updatePlayers(room.players);
 });
 
-socket.on("roomUpdate",room=>updatePlayers(room.players));
+socket.on("roomUpdate", room => {
+  updatePlayers(room.players);
+});
 
-function updatePlayers(players){
-  $("players").textContent=players.map((p,i)=>
-    `PLAYER ${i+1}: ${p.name} ${p.ready?"✓ READY":""}`
-  ).join("   •   ");
+function updatePlayers(players) {
+  $("players").textContent = players
+    .slice()
+    .sort((a, b) => a.side - b.side)
+    .map(p =>
+      `PLAYER ${p.side}: ${p.name} ${p.ready ? "✓ READY" : ""}`
+    )
+    .join("   •   ");
 }
 
-socket.on("joinError",msg=>$("status").textContent=msg);
+socket.on("joinError", msg => {
+  $("status").textContent = msg;
+});
 
-socket.on("gameStarted",()=>{
+socket.on("gameStarted", () => {
   $("lobby").classList.add("hidden");
   $("game").classList.remove("hidden");
-  started=true;
-  targetState=null;
-  displayState=null;
+
+  $("returnLobby").classList.add("hidden");
+
+  started = true;
+  targetState = null;
+  displayState = null;
+
   announce("GAME ON!");
 });
 
-socket.on("opponentLeft",()=>{
-  started=false;
+socket.on("opponentLeft", () => {
+  started = false;
+
   $("lobby").classList.remove("hidden");
   $("game").classList.add("hidden");
-  $("ready").disabled=false;
-  $("status").textContent="Your opponent left the court.";
+  $("ready").disabled = false;
+
+  $("status").textContent = "Your opponent left the court.";
 });
 
-socket.on("basket",data=>{
-  $("status").textContent=`${data.scorer} scored ${data.points}! Opponent gets possession.`;
+socket.on("basket", data => {
+  $("status").textContent =
+    `${data.scorer} scored ${data.points}! Opponent gets possession.`;
+
   announce(`${data.scorer.toUpperCase()} +${data.points}!`);
 });
 
-socket.on("blocked",data=>announce(`BLOCKED BY ${data.player.toUpperCase()}!`));
-socket.on("stolen",data=>announce(`${data.player.toUpperCase()} STEALS IT!`));
-socket.on("stunned",data=>announce(`${data.player.toUpperCase()} IS STUNNED!`));
-
-socket.on("shotTaken",data=>{
-  if(data.green) announce("GREEN RELEASE!");
-  else if(data.quality<35) announce("TOUGH SHOT!");
-  else announce(`${data.points}-POINT SHOT!`);
+socket.on("blocked", data => {
+  announce(`BLOCKED BY ${data.player.toUpperCase()}!`);
 });
 
-function announce(text){
-  message=text;
-  messageUntil=Date.now()+1150;
+socket.on("stolen", data => {
+  announce(`${data.player.toUpperCase()} STEALS IT!`);
+});
+
+socket.on("stunned", data => {
+  announce(`${data.player.toUpperCase()} IS STUNNED!`);
+});
+
+socket.on("shotTaken", data => {
+  if (data.green) {
+    announce("GREEN RELEASE!");
+  } else if (data.quality < 35) {
+    announce("TOUGH SHOT!");
+  } else {
+    announce(`${data.points}-POINT SHOT!`);
+  }
+});
+
+socket.on("periodUpdate", data => {
+  announce(`OVERTIME ${data.overtime}!`);
+});
+
+socket.on("gameOver", data => {
+  started = false;
+
+  if (data.winner) {
+    announce(`${data.winner.toUpperCase()} WINS!`);
+    $("status").textContent = `${data.winner} wins the game!`;
+  } else {
+    announce("TIE GAME!");
+    $("status").textContent = "The game ended tied.";
+  }
+
+  $("returnLobby").classList.remove("hidden");
+});
+
+function announce(text) {
+  message = text;
+  messageUntil = Date.now() + 1300;
 }
 
-socket.on("state",state=>{
-  targetState=state;
+socket.on("state", state => {
+  targetState = state;
 });
 
-window.addEventListener("keydown",e=>{
-  if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key))e.preventDefault();
-  if(e.repeat)return;
-  keys[e.key.toLowerCase()]=true;
+window.addEventListener("keydown", e => {
+  if (
+    ["ArrowLeft", "ArrowRight", "ArrowUp", " "].includes(e.key)
+  ) {
+    e.preventDefault();
+  }
+
+  if (e.repeat) return;
+
+  keys[e.key.toLowerCase()] = true;
   sendInput();
 });
 
-window.addEventListener("keyup",e=>{
-  keys[e.key.toLowerCase()]=false;
+window.addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
   sendInput();
 });
 
-window.addEventListener("blur",()=>{
-  for(const key in keys)keys[key]=false;
+window.addEventListener("blur", () => {
+  for (const key in keys) {
+    keys[key] = false;
+  }
+
   sendInput();
 });
 
-function sendInput(){
-  if(!started)return;
-  socket.emit("input",{
-    left:mySide===1?!!keys.a:!!keys.arrowleft,
-    right:mySide===1?!!keys.d:!!keys.arrowright,
-    up:mySide===1?!!keys.w:!!keys.arrowup,
-    shoot:!!keys[" "],
-    steal:!!keys.shift
+function sendInput() {
+  if (!started) return;
+
+  socket.emit("input", {
+    left: mySide === 1
+      ? !!keys.a
+      : !!keys.arrowleft,
+
+    right: mySide === 1
+      ? !!keys.d
+      : !!keys.arrowright,
+
+    up: mySide === 1
+      ? !!keys.w
+      : !!keys.arrowup,
+
+    shoot: !!keys[" "],
+    steal: !!keys.shift
   });
 }
 
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
 
-function rounded(ctx,x,y,w,h,r,color){
-  ctx.fillStyle=color;
+function rounded(ctx, x, y, w, h, r, color) {
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.roundRect(x,y,w,h,r);
+  ctx.roundRect(x, y, w, h, r);
   ctx.fill();
 }
 
-function glow(ctx,x,y,r,color,alpha=1){
+function glow(ctx, x, y, radius, color, alpha = 1) {
   ctx.save();
-  ctx.globalAlpha=alpha;
-  ctx.shadowColor=color;
-  ctx.shadowBlur=r;
-  ctx.fillStyle=color;
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = radius;
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(x,y,2,0,Math.PI*2);
+  ctx.arc(x, y, 2, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
-function drawArena(ctx,time){
-  const bg=ctx.createLinearGradient(0,0,0,470);
-  bg.addColorStop(0,"#101b2b");
-  bg.addColorStop(.55,"#26384d");
-  bg.addColorStop(1,"#6b7881");
-  ctx.fillStyle=bg;
-  ctx.fillRect(0,0,1200,470);
+function drawArena(ctx, time) {
+  const bg = ctx.createLinearGradient(0, 0, 0, 470);
 
-  for(let row=0;row<4;row++){
-    const y=105+row*48;
-    for(let x=10;x<1200;x+=17){
-      const wave=Math.sin(x*.04+time*.0005+row)*3;
-      const h=12+((x*7+row*13)%12);
-      ctx.fillStyle=["#111a28","#1b2636","#263246","#303b4d"][(x+row)%4];
+  bg.addColorStop(0, "#101b2b");
+  bg.addColorStop(.55, "#26384d");
+  bg.addColorStop(1, "#6b7881");
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 1200, 470);
+
+  for (let row = 0; row < 4; row++) {
+    const y = 105 + row * 48;
+
+    for (let x = 10; x < 1200; x += 17) {
+      const wave = Math.sin(x * .04 + time * .0005 + row) * 3;
+      const h = 12 + ((x * 7 + row * 13) % 12);
+
+      ctx.fillStyle = [
+        "#111a28",
+        "#1b2636",
+        "#263246",
+        "#303b4d"
+      ][(x + row) % 4];
+
       ctx.beginPath();
-      ctx.arc(x,y+wave,4+(row%2),Math.PI,0);
-      ctx.lineTo(x+5,y+h);
-      ctx.lineTo(x-5,y+h);
+      ctx.arc(x, y + wave, 4 + (row % 2), Math.PI, 0);
+      ctx.lineTo(x + 5, y + h);
+      ctx.lineTo(x - 5, y + h);
       ctx.closePath();
       ctx.fill();
     }
   }
 
-  const roof=ctx.createLinearGradient(0,0,0,100);
-  roof.addColorStop(0,"#080e18");
-  roof.addColorStop(1,"#1c2a3d");
-  ctx.fillStyle=roof;
-  ctx.fillRect(0,0,1200,90);
+  const roof = ctx.createLinearGradient(0, 0, 0, 100);
 
-  ctx.strokeStyle="#8291a422";
-  ctx.lineWidth=5;
-  for(let x=-100;x<1300;x+=170){
+  roof.addColorStop(0, "#080e18");
+  roof.addColorStop(1, "#1c2a3d");
+
+  ctx.fillStyle = roof;
+  ctx.fillRect(0, 0, 1200, 90);
+
+  ctx.strokeStyle = "#8291a422";
+  ctx.lineWidth = 5;
+
+  for (let x = -100; x < 1300; x += 170) {
     ctx.beginPath();
-    ctx.moveTo(x,0);
-    ctx.lineTo(x+100,90);
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + 100, 90);
     ctx.stroke();
   }
 
-  for(const x of [120,360,600,840,1080]){
-    const beam=ctx.createRadialGradient(x,55,4,x,210,190);
-    beam.addColorStop(0,"#fff5cf40");
-    beam.addColorStop(1,"#fff5cf00");
-    ctx.fillStyle=beam;
-    ctx.fillRect(x-190,55,380,330);
-    rounded(ctx,x-24,24,48,8,4,"#fff4d8");
-    glow(ctx,x,29,20,"#fff0bd",.6);
+  for (const x of [120, 360, 600, 840, 1080]) {
+    const beam = ctx.createRadialGradient(
+      x, 55, 4, x, 210, 190
+    );
+
+    beam.addColorStop(0, "#fff5cf40");
+    beam.addColorStop(1, "#fff5cf00");
+
+    ctx.fillStyle = beam;
+    ctx.fillRect(x - 190, 55, 380, 330);
+
+    rounded(ctx, x - 24, 24, 48, 8, 4, "#fff4d8");
+    glow(ctx, x, 29, 20, "#fff0bd", .6);
   }
 
-  ctx.fillStyle="#101a29";
-  ctx.fillRect(0,265,1200,105);
-  ctx.strokeStyle="#64748b55";
-  ctx.lineWidth=3;
+  ctx.fillStyle = "#101a29";
+  ctx.fillRect(0, 265, 1200, 105);
+
+  ctx.strokeStyle = "#64748b55";
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(0,270);
-  ctx.lineTo(1200,270);
+  ctx.moveTo(0, 270);
+  ctx.lineTo(1200, 270);
   ctx.stroke();
 
-  for(let x=60;x<1200;x+=220){
-    const board=ctx.createLinearGradient(x,0,x+175,0);
-    board.addColorStop(0,"#153c58");
-    board.addColorStop(.5,"#245b75");
-    board.addColorStop(1,"#142d48");
-    rounded(ctx,x,292,175,42,5,board);
-    ctx.strokeStyle="#9edaf855";
-    ctx.strokeRect(x,292,175,42);
-    ctx.fillStyle="#e9f4ff";
-    ctx.font="900 13px Arial";
-    ctx.textAlign="center";
-    ctx.fillText("HOOP DUEL",x+87,318);
+  for (let x = 60; x < 1200; x += 220) {
+    const board = ctx.createLinearGradient(x, 0, x + 175, 0);
+
+    board.addColorStop(0, "#153c58");
+    board.addColorStop(.5, "#245b75");
+    board.addColorStop(1, "#142d48");
+
+    rounded(ctx, x, 292, 175, 42, 5, board);
+
+    ctx.strokeStyle = "#9edaf855";
+    ctx.strokeRect(x, 292, 175, 42);
+
+    ctx.fillStyle = "#e9f4ff";
+    ctx.font = "900 13px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("HOOP DUEL", x + 87, 318);
   }
 }
 
-function drawFloor(ctx){
-  const wood=ctx.createLinearGradient(0,365,0,600);
-  wood.addColorStop(0,"#d6a16a");
-  wood.addColorStop(.5,"#bd8049");
-  wood.addColorStop(1,"#8c512c");
-  ctx.fillStyle=wood;
-  ctx.fillRect(0,365,1200,235);
+function drawFloor(ctx) {
+  const wood = ctx.createLinearGradient(0, 365, 0, 600);
 
-  for(let y=370;y<600;y+=23){
-    const row=Math.floor((y-370)/23);
-    for(let x=0;x<1200;x+=150){
-      ctx.fillStyle=(row+Math.floor(x/150))%2?"#ffffff08":"#572b1710";
-      ctx.fillRect(x,y,150,23);
-      ctx.strokeStyle="#633b2366";
-      ctx.lineWidth=1;
-      ctx.strokeRect(x,y,150,23);
+  wood.addColorStop(0, "#d6a16a");
+  wood.addColorStop(.5, "#bd8049");
+  wood.addColorStop(1, "#8c512c");
+
+  ctx.fillStyle = wood;
+  ctx.fillRect(0, 365, 1200, 235);
+
+  for (let y = 370; y < 600; y += 23) {
+    const row = Math.floor((y - 370) / 23);
+
+    for (let x = 0; x < 1200; x += 150) {
+      ctx.fillStyle =
+        (row + Math.floor(x / 150)) % 2
+          ? "#ffffff08"
+          : "#572b1710";
+
+      ctx.fillRect(x, y, 150, 23);
+
+      ctx.strokeStyle = "#633b2366";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, 150, 23);
     }
   }
 
-  const shine=ctx.createLinearGradient(0,365,0,500);
-  shine.addColorStop(0,"#ffffff20");
-  shine.addColorStop(1,"#ffffff00");
-  ctx.fillStyle=shine;
-  ctx.fillRect(0,365,1200,160);
+  const shine = ctx.createLinearGradient(0, 365, 0, 500);
 
-  ctx.strokeStyle="#fff0d5";
-  ctx.lineWidth=3;
+  shine.addColorStop(0, "#ffffff20");
+  shine.addColorStop(1, "#ffffff00");
+
+  ctx.fillStyle = shine;
+  ctx.fillRect(0, 365, 1200, 160);
+
+  ctx.strokeStyle = "#fff0d5";
+  ctx.lineWidth = 3;
+
+  // Baseline and center court.
   ctx.beginPath();
-  ctx.moveTo(0,470);
-  ctx.lineTo(1200,470);
+  ctx.moveTo(0, 470);
+  ctx.lineTo(1200, 470);
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(600,470);
-  ctx.lineTo(600,600);
+  ctx.moveTo(600, 470);
+  ctx.lineTo(600, 600);
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(600,535,83,58,0,0,Math.PI*2);
+  ctx.ellipse(600, 535, 83, 58, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.fillStyle="#a54c39";
-  ctx.fillRect(0,470,205,130);
-  ctx.fillRect(995,470,205,130);
-  ctx.strokeRect(0,470,205,130);
-  ctx.strokeRect(995,470,205,130);
+  // Keys.
+  ctx.fillStyle = "#a54c39";
+  ctx.fillRect(0, 470, 205, 130);
+  ctx.fillRect(995, 470, 205, 130);
+
+  ctx.strokeRect(0, 470, 205, 130);
+  ctx.strokeRect(995, 470, 205, 130);
 
   ctx.beginPath();
-  ctx.ellipse(205,535,67,58,0,-Math.PI/2,Math.PI/2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(995,535,67,58,0,Math.PI/2,Math.PI*1.5);
+  ctx.ellipse(205, 535, 67, 58, 0, -Math.PI / 2, Math.PI / 2);
   ctx.stroke();
 
-  // Three-point arcs.
   ctx.beginPath();
-  ctx.ellipse(90,535,335,220,0,-1.12,1.12);
+  ctx.ellipse(995, 535, 67, 58, 0, Math.PI / 2, Math.PI * 1.5);
   ctx.stroke();
+
+  // Cleaner, symmetrical three-point arcs.
+  // Each curved line bulges toward center court from the baseline.
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#fff0d5";
+
   ctx.beginPath();
-  ctx.ellipse(1110,535,335,220,0,Math.PI-1.12,Math.PI+1.12);
+  ctx.moveTo(0, 470);
+  ctx.quadraticCurveTo(850, 535, 0, 600);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(1200, 470);
+  ctx.quadraticCurveTo(350, 535, 1200, 600);
   ctx.stroke();
 
   ctx.save();
-  ctx.globalAlpha=.17;
-  ctx.fillStyle="#fff";
-  ctx.font="italic 900 46px Arial";
-  ctx.textAlign="center";
-  ctx.fillText("HOOP DUEL",600,555);
+  ctx.globalAlpha = .17;
+  ctx.fillStyle = "#fff";
+  ctx.font = "italic 900 46px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("HOOP DUEL", 600, 555);
   ctx.restore();
 }
 
-function drawHoop(ctx,x,direction){
+function drawHoop(ctx, x, direction) {
   ctx.save();
 
-  const pole=ctx.createLinearGradient(x-12,0,x+12,0);
-  pole.addColorStop(0,"#26313e");
-  pole.addColorStop(.5,"#aab5bf");
-  pole.addColorStop(1,"#1c2734");
-  ctx.fillStyle=pole;
-  ctx.fillRect(x-9,130,18,340);
-  rounded(ctx,x-31,457,62,13,5,"#252e39");
+  const pole = ctx.createLinearGradient(x - 12, 0, x + 12, 0);
 
-  ctx.strokeStyle="#293745";
-  ctx.lineWidth=12;
+  pole.addColorStop(0, "#26313e");
+  pole.addColorStop(.5, "#aab5bf");
+  pole.addColorStop(1, "#1c2734");
+
+  ctx.fillStyle = pole;
+  ctx.fillRect(x - 9, 130, 18, 340);
+
+  rounded(ctx, x - 31, 457, 62, 13, 5, "#252e39");
+
+  ctx.strokeStyle = "#293745";
+  ctx.lineWidth = 12;
   ctx.beginPath();
-  ctx.moveTo(x,135);
-  ctx.lineTo(x,183);
+  ctx.moveTo(x, 135);
+  ctx.lineTo(x, 183);
   ctx.stroke();
 
-  const glass=ctx.createLinearGradient(x-6,0,x+7,0);
-  glass.addColorStop(0,"#dcecf2");
-  glass.addColorStop(.5,"#ffffff");
-  glass.addColorStop(1,"#9fb7c4");
-  ctx.fillStyle=glass;
-  ctx.fillRect(x-7,143,14,75);
-  ctx.strokeStyle="#435565";
-  ctx.lineWidth=2;
-  ctx.strokeRect(x-7,143,14,75);
-  ctx.strokeStyle="#db6745";
-  ctx.lineWidth=2;
-  ctx.strokeRect(x-7,171,14,26);
+  const glass = ctx.createLinearGradient(x - 6, 0, x + 7, 0);
 
-  const rimX=x+direction*34;
+  glass.addColorStop(0, "#dcecf2");
+  glass.addColorStop(.5, "#ffffff");
+  glass.addColorStop(1, "#9fb7c4");
+
+  ctx.fillStyle = glass;
+  ctx.fillRect(x - 7, 143, 14, 75);
+
+  ctx.strokeStyle = "#435565";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - 7, 143, 14, 75);
+
+  ctx.strokeStyle = "#db6745";
+  ctx.strokeRect(x - 7, 171, 14, 26);
+
+  const rimX = x + direction * 34;
+
   ctx.save();
-  ctx.shadowColor="#ff6a35";
-  ctx.shadowBlur=12;
-  ctx.strokeStyle="#ff6334";
-  ctx.lineWidth=6;
+  ctx.shadowColor = "#ff6a35";
+  ctx.shadowBlur = 12;
+  ctx.strokeStyle = "#ff6334";
+  ctx.lineWidth = 6;
+
   ctx.beginPath();
-  ctx.ellipse(rimX,175,25,8,0,0,Math.PI*2);
+  ctx.ellipse(rimX, 175, 25, 8, 0, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 
-  ctx.strokeStyle="#f2eee6";
-  ctx.lineWidth=1.7;
-  for(let i=-3;i<=3;i++){
+  // Longer net with a wider upper opening and tapered bottom.
+  ctx.strokeStyle = "#f2eee6";
+  ctx.lineWidth = 1.7;
+
+  for (let i = -3; i <= 3; i++) {
     ctx.beginPath();
-    ctx.moveTo(rimX+i*7,181);
-    ctx.lineTo(rimX+i*4,229);
+    ctx.moveTo(rimX + i * 7, 181);
+    ctx.lineTo(rimX + i * 3.5, 270);
     ctx.stroke();
   }
-  for(let y=190;y<=225;y+=9){
-    const spread=25-(y-190)*.3;
+
+  for (let y = 193; y <= 265; y += 10) {
+    const spread = 25 - (y - 190) * .19;
+
     ctx.beginPath();
-    ctx.moveTo(rimX-spread,y);
-    ctx.lineTo(rimX+spread,y);
+    ctx.moveTo(rimX - spread, y);
+    ctx.lineTo(rimX + spread, y);
     ctx.stroke();
   }
+
   ctx.restore();
 }
 
-function drawPlayer(ctx,p,time){
-  const x=p.x,y=p.y;
-  const blue=p.side===1;
-  const main=blue?"#287bd2":"#d64b50";
-  const dark=blue?"#123d79":"#822b34";
-  const light=blue?"#70b9ff":"#ff9a91";
-  const skin="#c98b66";
-  const face=blue?1:-1;
-  const run=Math.abs(p.vx)>12;
-  const stride=run?Math.sin(time*.014)*10:0;
-  const stunned=p.stunned;
-
+function drawLimb(ctx, points, width, color) {
   ctx.save();
-  ctx.globalAlpha=clamp(1-(470-y)/250,.2,.4);
-  ctx.fillStyle="#120e0b";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+
   ctx.beginPath();
-  ctx.ellipse(x,472,31,8,0,0,Math.PI*2);
-  ctx.fill();
-  ctx.restore();
+  ctx.moveTo(points[0][0], points[0][1]);
 
-  ctx.lineCap="round";
-  ctx.lineWidth=13;
-  ctx.strokeStyle=dark;
-  ctx.beginPath();
-  ctx.moveTo(x-8,y-38);
-  ctx.lineTo(x-13+stride,y-9);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x+8,y-38);
-  ctx.lineTo(x+13-stride,y-9);
-  ctx.stroke();
-
-  rounded(ctx,x-25+stride,y-12,23,10,5,"#f3f4f2");
-  rounded(ctx,x+3-stride,y-12,23,10,5,"#e9edf2");
-  ctx.fillStyle="#303b4a";
-  ctx.fillRect(x-22+stride,y-5,19,3);
-  ctx.fillRect(x+5-stride,y-5,19,3);
-
-  const shorts=ctx.createLinearGradient(x-20,y-70,x+20,y-30);
-  shorts.addColorStop(0,main);
-  shorts.addColorStop(1,dark);
-  ctx.fillStyle=shorts;
-  ctx.beginPath();
-  ctx.moveTo(x-18,y-67);
-  ctx.lineTo(x+18,y-67);
-  ctx.lineTo(x+21,y-34);
-  ctx.lineTo(x+3,y-29);
-  ctx.lineTo(x,y-43);
-  ctx.lineTo(x-4,y-29);
-  ctx.lineTo(x-21,y-34);
-  ctx.closePath();
-  ctx.fill();
-
-  const shirt=ctx.createLinearGradient(x-22,y-125,x+22,y-65);
-  shirt.addColorStop(0,light);
-  shirt.addColorStop(.22,main);
-  shirt.addColorStop(1,dark);
-  ctx.fillStyle=shirt;
-  ctx.beginPath();
-  ctx.moveTo(x-14,y-119);
-  ctx.lineTo(x+14,y-119);
-  ctx.lineTo(x+24,y-108);
-  ctx.lineTo(x+18,y-66);
-  ctx.lineTo(x-18,y-66);
-  ctx.lineTo(x-24,y-108);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle="#ffffff88";
-  ctx.lineWidth=2;
-  ctx.stroke();
-
-  ctx.fillStyle="#fff";
-  ctx.font="900 19px Arial";
-  ctx.textAlign="center";
-  ctx.fillText(blue?"01":"02",x,y-82);
-
-  ctx.fillStyle=skin;
-  ctx.fillRect(x-6,y-128,12,14);
-
-  ctx.lineWidth=10;
-  ctx.strokeStyle=skin;
-  ctx.beginPath();
-  ctx.moveTo(x-face*17,y-111);
-
-  if(p.action==="dunk"||p.action==="block"){
-    ctx.lineTo(x-face*22,y-139);
-    ctx.lineTo(x-face*15,y-168);
-  }else if(p.action==="shoot"){
-    ctx.lineTo(x-face*25,y-140);
-    ctx.lineTo(x-face*12,y-163);
-  }else{
-    ctx.lineTo(x-face*27,y-91);
-    ctx.lineTo(x-face*31,y-76);
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i][0], points[i][1]);
   }
+
   ctx.stroke();
 
-  ctx.beginPath();
-  ctx.moveTo(x+face*17,y-111);
-  ctx.lineTo(x+face*27,y-91);
-  ctx.lineTo(x+face*29,y-77);
-  ctx.stroke();
+  ctx.fillStyle = color;
 
-  ctx.fillStyle=skin;
+  for (const [x, y] of points) {
+    ctx.beginPath();
+    ctx.arc(x, y, width * .48, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawPlayer(ctx, p, time) {
+  const x = p.x;
+  const y = p.y;
+
+  const blue = p.side === 1;
+  const main = blue ? "#287bd2" : "#d64b50";
+  const dark = blue ? "#123d79" : "#822b34";
+  const light = blue ? "#70b9ff" : "#ff9a91";
+  const trim = blue ? "#d7edff" : "#ffe0d9";
+  const skin = "#c98b66";
+  const face = blue ? 1 : -1;
+
+  const running = Math.abs(p.vx) > 12;
+  const stride = running ? Math.sin(time * .018) * 10 : 0;
+  const bob = running ? Math.abs(Math.sin(time * .018)) * 2 : 0;
+  const bodyY = y - bob;
+
+  ctx.save();
+
+  ctx.globalAlpha = clamp(1 - (470 - y) / 250, .2, .4);
+  ctx.fillStyle = "#120e0b";
   ctx.beginPath();
-  ctx.ellipse(x,y-145,14,18,0,0,Math.PI*2);
+  ctx.ellipse(x, 472, 31, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle="#1d1b1b";
+  ctx.restore();
+
+  // Legs and shoes.
+  const leftHip = [x - 9, bodyY - 42];
+  const rightHip = [x + 9, bodyY - 42];
+
+  const leftKnee = [
+    x - 15 + stride * .55,
+    bodyY - 24
+  ];
+
+  const rightKnee = [
+    x + 15 - stride * .55,
+    bodyY - 24
+  ];
+
+  const leftFoot = [
+    x - 17 + stride,
+    bodyY - 9
+  ];
+
+  const rightFoot = [
+    x + 17 - stride,
+    bodyY - 9
+  ];
+
+  drawLimb(
+    ctx,
+    [leftHip, leftKnee, leftFoot],
+    10,
+    dark
+  );
+
+  drawLimb(
+    ctx,
+    [rightHip, rightKnee, rightFoot],
+    10,
+    dark
+  );
+
+  rounded(
+    ctx,
+    leftFoot[0] - 9,
+    bodyY - 13,
+    22,
+    10,
+    4,
+    "#f3f4f2"
+  );
+
+  rounded(
+    ctx,
+    rightFoot[0] - 9,
+    bodyY - 13,
+    22,
+    10,
+    4,
+    "#e9edf2"
+  );
+
+  ctx.fillStyle = "#303b4a";
+  ctx.fillRect(leftFoot[0] - 5, bodyY - 5, 15, 3);
+  ctx.fillRect(rightFoot[0] - 5, bodyY - 5, 15, 3);
+
+  // Shorts.
+  const shorts = ctx.createLinearGradient(
+    x - 20, bodyY - 75,
+    x + 20, bodyY - 28
+  );
+
+  shorts.addColorStop(0, main);
+  shorts.addColorStop(1, dark);
+
+  ctx.fillStyle = shorts;
   ctx.beginPath();
-  ctx.arc(x,y-151,14,Math.PI,Math.PI*2);
-  ctx.lineTo(x+12,y-148);
-  ctx.lineTo(x-12,y-148);
+  ctx.moveTo(x - 18, bodyY - 65);
+  ctx.lineTo(x + 18, bodyY - 65);
+  ctx.lineTo(x + 21, bodyY - 34);
+  ctx.lineTo(x + 3, bodyY - 29);
+  ctx.lineTo(x, bodyY - 42);
+  ctx.lineTo(x - 4, bodyY - 29);
+  ctx.lineTo(x - 21, bodyY - 34);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle="#fff";
+  ctx.strokeStyle = trim;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(x+face*6,y-145,2,0,Math.PI*2);
+  ctx.moveTo(x, bodyY - 39);
+  ctx.lineTo(x, bodyY - 31);
+  ctx.stroke();
+
+  // Jersey.
+  const shirt = ctx.createLinearGradient(
+    x - 22, bodyY - 126,
+    x + 22, bodyY - 63
+  );
+
+  shirt.addColorStop(0, light);
+  shirt.addColorStop(.25, main);
+  shirt.addColorStop(1, dark);
+
+  ctx.fillStyle = shirt;
+  ctx.beginPath();
+  ctx.moveTo(x - 14, bodyY - 119);
+  ctx.lineTo(x + 14, bodyY - 119);
+  ctx.lineTo(x + 24, bodyY - 108);
+  ctx.lineTo(x + 19, bodyY - 66);
+  ctx.lineTo(x - 19, bodyY - 66);
+  ctx.lineTo(x - 24, bodyY - 108);
+  ctx.closePath();
   ctx.fill();
 
+  ctx.strokeStyle = trim;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Jersey side panels.
+  ctx.fillStyle = dark;
+  ctx.fillRect(x - 19, bodyY - 105, 5, 35);
+  ctx.fillRect(x + 14, bodyY - 105, 5, 35);
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "900 19px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(blue ? "01" : "02", x, bodyY - 82);
+
+  // Neck.
+  ctx.fillStyle = skin;
+  ctx.fillRect(x - 6, bodyY - 130, 12, 15);
+
+  // Arms.
+  const shooting = p.action === "shoot";
+  const jumping = p.action === "dunk" || p.action === "block";
+
+  let nearArm;
+  let farArm;
+
+  if (shooting) {
+    nearArm = [
+      [x - face * 15, bodyY - 110],
+      [x - face * 23, bodyY - 140],
+      [x - face * 12, bodyY - 163]
+    ];
+
+    farArm = [
+      [x + face * 15, bodyY - 110],
+      [x + face * 27, bodyY - 92],
+      [x + face * 29, bodyY - 78]
+    ];
+  } else if (jumping) {
+    nearArm = [
+      [x - face * 15, bodyY - 110],
+      [x - face * 23, bodyY - 139],
+      [x - face * 16, bodyY - 168]
+    ];
+
+    farArm = [
+      [x + face * 15, bodyY - 110],
+      [x + face * 24, bodyY - 132],
+      [x + face * 28, bodyY - 151]
+    ];
+  } else {
+    nearArm = [
+      [x - face * 16, bodyY - 108],
+      [x - face * 25, bodyY - 88 + stride * .25],
+      [x - face * 29, bodyY - 77 + stride * .25]
+    ];
+
+    farArm = [
+      [x + face * 16, bodyY - 108],
+      [x + face * 25, bodyY - 90 - stride * .25],
+      [x + face * 29, bodyY - 78 - stride * .25]
+    ];
+  }
+
+  drawLimb(ctx, farArm, 9, skin);
+  drawLimb(ctx, nearArm, 10, skin);
+
+  // Head and hair.
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.ellipse(x, bodyY - 145, 14, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#1d1b1b";
+  ctx.beginPath();
+  ctx.arc(x, bodyY - 151, 14, Math.PI, Math.PI * 2);
+  ctx.lineTo(x + 12, bodyY - 148);
+  ctx.lineTo(x - 12, bodyY - 148);
+  ctx.closePath();
+  ctx.fill();
+
+  // Face.
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(x + face * 6, bodyY - 145, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#36231d";
+  ctx.beginPath();
+  ctx.arc(x + face * 7, bodyY - 145, 1, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#7b4436";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(x + face * 8, bodyY - 137);
+  ctx.lineTo(x + face * 12, bodyY - 138);
+  ctx.stroke();
+
+  // Player name.
   ctx.save();
-  ctx.textAlign="center";
-  ctx.font="bold 14px Arial";
-  ctx.shadowColor="#000";
-  ctx.shadowBlur=6;
-  ctx.fillStyle="#fff";
-  ctx.fillText(p.name,x,y-177);
+  ctx.textAlign = "center";
+  ctx.font = "bold 14px Arial";
+  ctx.shadowColor = "#000";
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = "#fff";
+  ctx.fillText(p.name, x, bodyY - 177);
   ctx.restore();
 
-  if(stunned){
+  if (p.stunned) {
     ctx.save();
-    ctx.strokeStyle="#ffe16a";
-    ctx.lineWidth=3;
+    ctx.strokeStyle = "#ffe16a";
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(x,y-151,23,0,Math.PI*2);
+    ctx.arc(x, bodyY - 151, 23, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle="#ffe16a";
-    ctx.font="bold 14px Arial";
-    ctx.textAlign="center";
-    ctx.fillText("STUNNED",x,y-194);
+
+    ctx.fillStyle = "#ffe16a";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("STUNNED", x, bodyY - 194);
     ctx.restore();
   }
 
-  if(p.charging){
-    drawShotMeter(ctx,x,y-215,p.charge);
+  if (p.charging) {
+    drawShotMeter(
+      ctx,
+      x,
+      bodyY - 215,
+      p.displayCharge ?? p.charge
+    );
   }
 }
 
-function drawShotMeter(ctx,x,y,charge){
-  const w=112,h=13;
-  const left=x-w/2;
-  const normalized=clamp(charge/1.2,0,1);
+function drawShotMeter(ctx, x, y, charge) {
+  const w = 112;
+  const h = 13;
+  const left = x - w / 2;
+  const normalized = clamp(charge / 1.2, 0, 1);
 
   ctx.save();
-  ctx.shadowColor="#000";
-  ctx.shadowBlur=8;
-  rounded(ctx,left-3,y-3,w+6,h+6,7,"#101722");
-  ctx.restore();
 
-  // Red and yellow zones, with a distinct green release window.
-  const gradient=ctx.createLinearGradient(left,0,left+w,0);
-  gradient.addColorStop(0,"#e44c45");
-  gradient.addColorStop(.42,"#f0b744");
-  gradient.addColorStop(.55,"#42e58b");
-  gradient.addColorStop(.65,"#42e58b");
-  gradient.addColorStop(.78,"#f0b744");
-  gradient.addColorStop(1,"#e44c45");
-  rounded(ctx,left,y,w,h,5,gradient);
+  ctx.shadowColor = "#000";
+  ctx.shadowBlur = 8;
 
-  ctx.fillStyle="#ffffff";
-  ctx.fillRect(left+w*normalized-2,y-4,4,h+8);
+  rounded(
+    ctx,
+    left - 3,
+    y - 3,
+    w + 6,
+    h + 6,
+    7,
+    "#101722"
+  );
 
-  ctx.textAlign="center";
-  ctx.font="900 10px Arial";
-  ctx.fillStyle="#fff";
-  ctx.shadowColor="#000";
-  ctx.shadowBlur=5;
-  ctx.fillText("RELEASE IN GREEN",x,y-8);
+  ctx.shadowBlur = 0;
+
+  const gradient = ctx.createLinearGradient(
+    left, 0, left + w, 0
+  );
+
+  gradient.addColorStop(0, "#e44c45");
+  gradient.addColorStop(.42, "#f0b744");
+  gradient.addColorStop(.55, "#42e58b");
+  gradient.addColorStop(.65, "#42e58b");
+  gradient.addColorStop(.78, "#f0b744");
+  gradient.addColorStop(1, "#e44c45");
+
+  rounded(ctx, left, y, w, h, 5, gradient);
+
+  // Smoothly interpolated release indicator.
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(
+    left + w * normalized - 2,
+    y - 4,
+    4,
+    h + 8
+  );
+
+  ctx.textAlign = "center";
+  ctx.font = "900 10px Arial";
+  ctx.fillStyle = "#fff";
+  ctx.shadowColor = "#000";
+  ctx.shadowBlur = 5;
+  ctx.fillText("RELEASE IN GREEN", x, y - 8);
+
   ctx.restore();
 }
 
-function drawBasketball(ctx,x,y,time){
-  const r=22;
+function drawBasketball(ctx, x, y, time) {
+  const r = 22;
 
   ctx.save();
-  ctx.globalAlpha=.22;
-  ctx.fillStyle="#23160e";
+  ctx.globalAlpha = .22;
+  ctx.fillStyle = "#23160e";
   ctx.beginPath();
-  ctx.ellipse(x+3,y+r+7,r*1.1,5,0,0,Math.PI*2);
+  ctx.ellipse(x + 3, y + r + 7, r * 1.1, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  const ball=ctx.createRadialGradient(x-9,y-11,2,x+1,y+1,r+3);
-  ball.addColorStop(0,"#fff0ad");
-  ball.addColorStop(.25,"#ffd16d");
-  ball.addColorStop(.65,"#ff9c35");
-  ball.addColorStop(1,"#d85c1e");
+  const ball = ctx.createRadialGradient(
+    x - 9, y - 11, 2,
+    x + 1, y + 1, r + 3
+  );
+
+  ball.addColorStop(0, "#fff0ad");
+  ball.addColorStop(.25, "#ffd16d");
+  ball.addColorStop(.65, "#ff9c35");
+  ball.addColorStop(1, "#d85c1e");
 
   ctx.save();
-  ctx.shadowColor="#ffae4e";
-  ctx.shadowBlur=13;
-  ctx.fillStyle=ball;
+  ctx.shadowColor = "#ffae4e";
+  ctx.shadowBlur = 13;
+  ctx.fillStyle = ball;
   ctx.beginPath();
-  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
   ctx.save();
   ctx.beginPath();
-  ctx.arc(x,y,r-1,0,Math.PI*2);
+  ctx.arc(x, y, r - 1, 0, Math.PI * 2);
   ctx.clip();
 
-  ctx.strokeStyle="#8d431d";
-  ctx.lineWidth=2.2;
+  ctx.strokeStyle = "#8d431d";
+  ctx.lineWidth = 2.2;
 
   ctx.beginPath();
-  ctx.moveTo(x-r,y);
-  ctx.quadraticCurveTo(x,y-5,x+r,y);
+  ctx.moveTo(x - r, y);
+  ctx.quadraticCurveTo(x, y - 5, x + r, y);
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(x,y-r);
-  ctx.quadraticCurveTo(x-5,y,x,y+r);
+  ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x - 5, y, x, y + r);
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(x,y,r*.53,r,Math.sin(time*.002)*.15,0,Math.PI*2);
+  ctx.ellipse(
+    x,
+    y,
+    r * .53,
+    r,
+    Math.sin(time * .002) * .15,
+    0,
+    Math.PI * 2
+  );
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(x,y,r*.53,r,-Math.sin(time*.002)*.15,0,Math.PI*2);
+  ctx.ellipse(
+    x,
+    y,
+    r * .53,
+    r,
+    -Math.sin(time * .002) * .15,
+    0,
+    Math.PI * 2
+  );
   ctx.stroke();
+
   ctx.restore();
 
-  const shine=ctx.createRadialGradient(x-9,y-10,1,x-5,y-7,13);
-  shine.addColorStop(0,"#ffffffb8");
-  shine.addColorStop(1,"#ffffff00");
-  ctx.fillStyle=shine;
+  const shine = ctx.createRadialGradient(
+    x - 9, y - 10, 1,
+    x - 5, y - 7, 13
+  );
+
+  shine.addColorStop(0, "#ffffffb8");
+  shine.addColorStop(1, "#ffffff00");
+
+  ctx.fillStyle = shine;
   ctx.beginPath();
-  ctx.arc(x-5,y-7,13,0,Math.PI*2);
+  ctx.arc(x - 5, y - 7, 13, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle="#9a4a20";
-  ctx.lineWidth=1.5;
+  ctx.strokeStyle = "#9a4a20";
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.stroke();
 }
 
-let lastFrame=performance.now();
+let lastFrame = performance.now();
 
-function animate(now){
+function animate(now) {
   requestAnimationFrame(animate);
-  if(!targetState)return;
 
-  const dt=Math.min((now-lastFrame)/1000,.05);
-  lastFrame=now;
+  if (!targetState) return;
 
-  if(!displayState){
-    displayState=JSON.parse(JSON.stringify(targetState));
+  const dt = Math.min((now - lastFrame) / 1000, .05);
+  lastFrame = now;
+
+  if (!displayState) {
+    displayState = JSON.parse(JSON.stringify(targetState));
+
+    displayState.players.forEach(p => {
+      p.displayCharge = p.charge || 0;
+    });
   }
 
-  const smooth=1-Math.exp(-dt*24);
+  // Interpolate positions between 30 FPS server snapshots.
+  const smooth = 1 - Math.exp(-dt * 18);
 
-  displayState.players=targetState.players.map((target,index)=>{
-    const old=displayState.players[index]||target;
+  displayState.players = targetState.players.map((target, index) => {
+    const old = displayState.players[index] || target;
+
     return {
       ...target,
-      x:lerp(old.x,target.x,smooth),
-      y:lerp(old.y,target.y,smooth)
+      x: lerp(old.x, target.x, smooth),
+      y: lerp(old.y, target.y, smooth),
+      vx: lerp(old.vx || 0, target.vx || 0, smooth),
+      displayCharge: lerp(
+        old.displayCharge ?? target.charge,
+        target.charge,
+        1 - Math.exp(-dt * 20)
+      )
     };
   });
 
-  displayState.ball={
+  displayState.ball = {
     ...targetState.ball,
-    x:lerp(displayState.ball.x,targetState.ball.x,smooth),
-    y:lerp(displayState.ball.y,targetState.ball.y,smooth)
+    x: lerp(
+      displayState.ball.x,
+      targetState.ball.x,
+      smooth
+    ),
+    y: lerp(
+      displayState.ball.y,
+      targetState.ball.y,
+      smooth
+    )
   };
 
-  draw(displayState,now);
+  displayState.clock = targetState.clock;
+
+  draw(displayState, now);
 }
 
-function draw(state,time){
-  const canvas=$("court");
-  const ctx=canvas.getContext("2d");
+function draw(state, time) {
+  const canvas = $("court");
+  const ctx = canvas.getContext("2d");
 
-  ctx.clearRect(0,0,1200,600);
-  drawArena(ctx,time);
+  ctx.clearRect(0, 0, 1200, 600);
+
+  drawArena(ctx, time);
   drawFloor(ctx);
 
-  drawHoop(ctx,48,1);
-  drawHoop(ctx,1152,-1);
+  drawHoop(ctx, 48, 1);
+  drawHoop(ctx, 1152, -1);
 
-  state.players.forEach(p=>drawPlayer(ctx,p,time));
-  drawBasketball(ctx,state.ball.x,state.ball.y,time);
+  state.players.forEach(p => {
+    drawPlayer(ctx, p, time);
+  });
 
-  $("p1").textContent=`${state.players[0]?.name||"PLAYER 1"}: ${state.players[0]?.score||0}`;
-  $("p2").textContent=`${state.players[1]?.name||"PLAYER 2"}: ${state.players[1]?.score||0}`;
+  drawBasketball(
+    ctx,
+    state.ball.x,
+    state.ball.y,
+    time
+  );
 
-  if(Date.now()<messageUntil){
+  const p1 = state.players.find(p => p.side === 1);
+  const p2 = state.players.find(p => p.side === 2);
+
+  $("p1").textContent =
+    `${p1?.name || "PLAYER 1"}: ${p1?.score || 0}`;
+
+  $("p2").textContent =
+    `${p2?.name || "PLAYER 2"}: ${p2?.score || 0}`;
+
+  if (state.clock) {
+    $("clock").textContent = state.clock.label;
+  }
+
+  if (Date.now() < messageUntil) {
     ctx.save();
-    ctx.textAlign="center";
-    ctx.font="1000 38px Arial";
-    ctx.fillStyle="#fff";
-    ctx.shadowColor="#000";
-    ctx.shadowBlur=13;
-    ctx.fillText(message,600,125);
+    ctx.textAlign = "center";
+    ctx.font = "1000 38px Arial";
+    ctx.fillStyle = "#fff";
+    ctx.shadowColor = "#000";
+    ctx.shadowBlur = 13;
+    ctx.fillText(message, 600, 125);
     ctx.restore();
   }
 }
