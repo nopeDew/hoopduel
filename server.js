@@ -1,4 +1,3 @@
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -67,6 +66,7 @@ function createPlayer(socket, name, side) {
     previousInput: {},
     shootStartedAt: null,
     lastStealAt: 0,
+    lastPumpFakeAt: 0,
     stunnedUntil: 0,
     action: "idle",
     actionUntil: 0,
@@ -102,14 +102,21 @@ function formatTime(ms) {
 }
 
 function getClock(room, now = Date.now()) {
+  const countdown = room.jumpBallStartsAt && now < room.jumpBallStartsAt
+    ? Math.ceil((room.jumpBallStartsAt - now) / 1000)
+    : 0;
+
   const remainingMs = Math.max(0, room.periodEndsAt - now);
 
   return {
     remainingMs,
     overtime: room.overtime,
-    label: room.overtime
-      ? `OT ${room.overtime} · ${formatTime(remainingMs)}`
-      : formatTime(remainingMs),
+    jumpBallCountdown: countdown,
+    label: countdown > 0
+      ? "TIP-OFF"
+      : room.overtime
+        ? `OT ${room.overtime} · ${formatTime(remainingMs)}`
+        : formatTime(remainingMs),
     gameOver: !!room.gameOver
   };
 }
@@ -167,17 +174,15 @@ function startGame(room) {
   room.started = true;
   room.gameOver = false;
   room.overtime = 0;
-  room.periodEndsAt = now + REGULATION_MS;
+  room.jumpBallStartsAt = now + 3000;
+  room.periodEndsAt = room.jumpBallStartsAt + REGULATION_MS;
   room.lastTick = now;
   room.snapshotCounter = 0;
 
   room.players.forEach((p, index) => {
     p.score = 0;
     p.ready = false;
-
-    // Both players start close to the raised center ball.
     p.x = index === 0 ? 570 : 630;
-
     p.y = COURT.floor;
     p.vx = 0;
     p.vy = 0;
@@ -190,7 +195,7 @@ function startGame(room) {
     p.stunnedUntil = 0;
   });
 
-  // Raised opening ball for a higher tip-off contest.
+  // Raised opening ball for the jump-ball contest.
   room.ball = createBall();
   room.ball.x = 600;
   room.ball.y = 165;
@@ -206,8 +211,15 @@ function startGame(room) {
 function followHolder(ball, player) {
   const direction = player.side === 1 ? 1 : -1;
 
-  ball.x = player.x + direction * 30;
-  ball.y = player.y - 68;
+  // During a pump fake, raise the held ball above the player's head.
+  if (player.action === "pumpFake") {
+    ball.x = player.x + direction * 15;
+    ball.y = player.y - 190;
+  } else {
+    ball.x = player.x + direction * 30;
+    ball.y = player.y - 68;
+  }
+
   ball.vx = player.vx * 0.25;
   ball.vy = 0;
 }
@@ -313,8 +325,6 @@ function tryPickupBall(room) {
     Date.now() < ball.pickupLockoutUntil
   ) return;
 
-  // Compare the ball to the player's upper-body reach.
-  // This lets a jumping player contest the raised tip-off.
   const nearest = room.players.map(player => ({
     player,
     distance: Math.hypot(
@@ -386,7 +396,6 @@ function shootBall(room, p, heldMilliseconds) {
     : 999;
 
   const pressure = clamp((165 - defenderDistance) / 165, 0, 1);
-
   const quality = clamp(
     timingQuality * distanceQuality - pressure * 0.34,
     0.08,
@@ -557,7 +566,8 @@ function scoreBasket(room, scorer, points) {
   room.ball.owner = null;
   room.ball.shotBySide = null;
 
-  // Let the ball fall through the net before changing possession.
+  // Put the ball just above the rim, then let it visibly fall
+  // through the extended net before possession changes.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
@@ -610,7 +620,7 @@ function checkBasket(room) {
   let scorer = null;
 
   if (
-    Math.abs(crossingX - COURT.rightHoop) < 30 &&
+    Math.abs(crossingX - COURT.rightHoop) < 24 &&
     ball.vx > 0 &&
     ball.shotBySide === 1
   ) {
@@ -618,7 +628,7 @@ function checkBasket(room) {
   }
 
   if (
-    Math.abs(crossingX - COURT.leftHoop) < 30 &&
+    Math.abs(crossingX - COURT.leftHoop) < 24 &&
     ball.vx < 0 &&
     ball.shotBySide === 2
   ) {
@@ -654,7 +664,6 @@ function finishGame(room) {
   room.started = false;
 
   const [p1, p2] = room.players;
-
   const winner = p1.score === p2.score
     ? null
     : p1.score > p2.score
@@ -688,6 +697,7 @@ function updateGameClock(room, now) {
     return;
   }
 
+  // Tied games receive another full 15-second overtime.
   room.overtime += 1;
   room.periodEndsAt = now + OVERTIME_MS;
 
@@ -712,6 +722,7 @@ io.on("connection", socket => {
       started: false,
       gameOver: false,
       overtime: 0,
+      jumpBallStartsAt: null,
       periodEndsAt: 0,
       lastTick: Date.now(),
       snapshotCounter: 0
@@ -770,7 +781,13 @@ io.on("connection", socket => {
 
   socket.on("input", input => {
     const room = rooms.get(socket.data.room);
-    if (!room || !room.started) return;
+
+    // Block all input until the jump-ball countdown finishes.
+    if (
+      !room ||
+      !room.started ||
+      Date.now() < room.jumpBallStartsAt
+    ) return;
 
     const p = room.players.find(
       player => player.id === socket.id
@@ -783,8 +800,29 @@ io.on("connection", socket => {
       right: !!input.right,
       up: !!input.up,
       shoot: !!input.shoot,
-      steal: !!input.steal
+      steal: !!input.steal,
+      pumpFake: !!input.pumpFake
     };
+
+    const now = Date.now();
+
+    // Pump fake only works while holding the ball and not charging a shot.
+    // The edge check means holding the key does not repeatedly trigger it.
+    if (
+      next.pumpFake &&
+      !p.input.pumpFake &&
+      room.ball.owner === p.id &&
+      p.shootStartedAt === null &&
+      now - p.lastPumpFakeAt >= 500
+    ) {
+      p.lastPumpFakeAt = now;
+      p.action = "pumpFake";
+      p.actionUntil = now + 500;
+
+      io.to(room.code).emit("pumpFaked", {
+        player: p.name
+      });
+    }
 
     if (
       next.shoot &&
@@ -837,12 +875,25 @@ io.on("connection", socket => {
   });
 });
 
-// 60 FPS physics, with 30 FPS network snapshots.
+// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS
+// to reduce traffic while client-side interpolation stays smooth.
 setInterval(() => {
   const now = Date.now();
 
   for (const room of rooms.values()) {
     if (!room.started || room.players.length !== 2) continue;
+
+    // Keep the ball and players frozen until the jump-ball countdown ends.
+    if (now < room.jumpBallStartsAt) {
+      room.snapshotCounter += 1;
+
+      if (room.snapshotCounter >= SNAPSHOT_EVERY) {
+        room.snapshotCounter = 0;
+        emitState(room, now);
+      }
+
+      continue;
+    }
 
     updateGameClock(room, now);
     if (!room.started) continue;
