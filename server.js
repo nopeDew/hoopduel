@@ -96,6 +96,7 @@ function formatTime(ms) {
   const seconds = Math.ceil(Math.max(0, ms) / 1000);
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
+
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
@@ -173,7 +174,7 @@ function startGame(room) {
     p.score = 0;
     p.ready = false;
 
-    // Players start closer to the raised center ball.
+    // Both players start close to the raised center ball.
     p.x = index === 0 ? 570 : 630;
 
     p.y = COURT.floor;
@@ -237,6 +238,7 @@ function movePlayer(p, dt) {
 
   if (direction) {
     const target = direction * PLAYER_SPEED;
+
     p.vx += clamp(
       target - p.vx,
       -acceleration * dt,
@@ -381,6 +383,7 @@ function shootBall(room, p, heldMilliseconds) {
     : 999;
 
   const pressure = clamp((165 - defenderDistance) / 165, 0, 1);
+
   const quality = clamp(
     timingQuality * distanceQuality - pressure * 0.34,
     0.08,
@@ -551,8 +554,7 @@ function scoreBasket(room, scorer, points) {
   room.ball.owner = null;
   room.ball.shotBySide = null;
 
-  // Put the ball just above the rim, then let it visibly fall
-  // through the net before possession changes.
+  // Let the ball fall through the hoop before changing possession.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
@@ -649,6 +651,7 @@ function finishGame(room) {
   room.started = false;
 
   const [p1, p2] = room.players;
+
   const winner = p1.score === p2.score
     ? null
     : p1.score > p2.score
@@ -682,7 +685,7 @@ function updateGameClock(room, now) {
     return;
   }
 
-  // Tied games receive another full 15-second overtime.
+  // Tied games receive another 15-second overtime.
   room.overtime += 1;
   room.periodEndsAt = now + OVERTIME_MS;
 
@@ -832,8 +835,7 @@ io.on("connection", socket => {
   });
 });
 
-// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS
-// to reduce traffic while client-side interpolation stays smooth.
+// 60 FPS physics, with 30 FPS network snapshots.
 setInterval(() => {
   const now = Date.now();
 
