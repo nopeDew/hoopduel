@@ -13,8 +13,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  display: grid;
-  place-items: start center;
+  display: block;
   background: radial-gradient(
     ellipse at 50% 0%,
     #344d70 0%,
@@ -27,7 +26,11 @@ body {
 
 .wrap {
   width: min(1500px, 99vw);
+  min-height: 100vh;
+  margin: 0 auto;
   padding: 14px;
+  display: flex;
+  flex-direction: column;
 }
 
 .brand {
@@ -473,10 +476,6 @@ socket.on("stunned", data => {
   announce(`${data.player.toUpperCase()} IS STUNNED!`);
 });
 
-socket.on("pumpFaked", data => {
-  announce(`${data.player.toUpperCase()} PUMP FAKES!`);
-});
-
 socket.on("shotTaken", data => {
   if (data.green) {
     announce("GREEN RELEASE!");
@@ -558,7 +557,6 @@ function sendInput() {
 
     shoot: !!keys[" "],
     steal: !!keys.shift,
-
     pumpFake: mySide === 1
       ? !!keys.s
       : !!keys.arrowdown
@@ -1422,11 +1420,13 @@ function drawJumpBallCountdown(ctx, count) {
 
   ctx.save();
 
+  // Dark circular background.
   ctx.fillStyle = "#08111fdd";
   ctx.beginPath();
   ctx.arc(600, 270, 68, 0, Math.PI * 2);
   ctx.fill();
 
+  // Amber outline and glow.
   ctx.shadowColor = "#ffc36e";
   ctx.shadowBlur = 22;
   ctx.strokeStyle = "#ffc36e";
