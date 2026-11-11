@@ -13,7 +13,8 @@
 body {
   margin: 0;
   min-height: 100vh;
-  display: block;
+  display: grid;
+  place-items: start center;
   background: radial-gradient(
     ellipse at 50% 0%,
     #344d70 0%,
@@ -26,10 +27,7 @@ body {
 
 .wrap {
   width: min(1500px, 99vw);
-  min-height: 100vh;
   padding: 14px;
-  display: flex;
-  flex-direction: column;
 }
 
 .brand {
@@ -37,7 +35,6 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
-  flex: none;
 }
 
 h1 {
@@ -64,7 +61,6 @@ h1 {
 
 #lobby {
   max-width: 600px;
-  width: 100%;
   margin: auto;
 }
 
@@ -206,7 +202,7 @@ canvas {
   margin-top: 12px;
 }
 
-/* Fullscreen styling. */
+/* Fullscreen uses a dark canvas surround and hides the instructions. */
 #game:fullscreen {
   width: 100vw;
   height: 100vh;
@@ -337,8 +333,8 @@ canvas {
     </div>
 
     <div class="controls">
-      <span><strong>Player 1:</strong> A/D move · W jump</span>
-      <span><strong>Player 2:</strong> ←/→ move · ↑ jump</span>
+      <span><strong>Player 1:</strong> A/D move · W jump · S pump fake</span>
+      <span><strong>Player 2:</strong> ←/→ move · ↑ jump · ↓ pump fake</span>
       <span><strong>Both:</strong> Hold/release Space to shoot · Shift to steal or stun</span>
       <span>Jump near the basket to dunk · Jump into a shot to block</span>
     </div>
@@ -438,13 +434,14 @@ socket.on("joinError", msg => {
 socket.on("gameStarted", () => {
   $("lobby").classList.add("hidden");
   $("game").classList.remove("hidden");
+
   $("returnLobby").classList.add("hidden");
 
   started = true;
   targetState = null;
   displayState = null;
 
-  announce("GAME ON!");
+  announce("GET READY!");
 });
 
 socket.on("opponentLeft", () => {
@@ -474,6 +471,10 @@ socket.on("stolen", data => {
 
 socket.on("stunned", data => {
   announce(`${data.player.toUpperCase()} IS STUNNED!`);
+});
+
+socket.on("pumpFaked", data => {
+  announce(`${data.player.toUpperCase()} PUMP FAKES!`);
 });
 
 socket.on("shotTaken", data => {
@@ -515,7 +516,7 @@ socket.on("state", state => {
 
 window.addEventListener("keydown", e => {
   if (
-    ["ArrowLeft", "ArrowRight", "ArrowUp", " "].includes(e.key)
+    ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)
   ) {
     e.preventDefault();
   }
@@ -556,7 +557,11 @@ function sendInput() {
       : !!keys.arrowup,
 
     shoot: !!keys[" "],
-    steal: !!keys.shift
+    steal: !!keys.shift,
+
+    pumpFake: mySide === 1
+      ? !!keys.s
+      : !!keys.arrowdown
   });
 }
 
@@ -591,6 +596,7 @@ function drawArena(ctx, time) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1200, 470);
 
+  // Dark rafters.
   const roof = ctx.createLinearGradient(0, 0, 0, 100);
   roof.addColorStop(0, "#050a12");
   roof.addColorStop(1, "#1b2a3c");
@@ -607,6 +613,7 @@ function drawArena(ctx, time) {
     ctx.stroke();
   }
 
+  // Stylized crowd seating.
   const crowdColors = [
     "#d45c53", "#e1b66c", "#577eac",
     "#d9dce2", "#438d78", "#8b6db2"
@@ -617,7 +624,6 @@ function drawArena(ctx, time) {
 
     for (let x = 8; x < 1200; x += 19) {
       const wave = Math.sin(x * .035 + time * .001 + row) * 2;
-
       ctx.fillStyle = crowdColors[
         Math.abs(Math.floor(x * .13 + row * 7)) % crowdColors.length
       ];
@@ -633,6 +639,7 @@ function drawArena(ctx, time) {
     }
   }
 
+  // LED ribbon board.
   const ribbon = ctx.createLinearGradient(0, 0, 1200, 0);
   ribbon.addColorStop(0, "#142c44");
   ribbon.addColorStop(.5, "#244d67");
@@ -650,6 +657,7 @@ function drawArena(ctx, time) {
   ctx.textAlign = "center";
   ctx.fillText("HOOP DUEL  •  HOME COURT  •  HOOP DUEL", 600, 283);
 
+  // Arena panels.
   for (const x of [60, 280, 500, 720, 940, 1160]) {
     const board = ctx.createLinearGradient(x - 50, 0, x + 50, 0);
     board.addColorStop(0, "#14334c");
@@ -668,6 +676,7 @@ function drawArena(ctx, time) {
     ctx.fillText("HD", x, 329);
   }
 
+  // Spotlights.
   for (const x of [120, 360, 600, 840, 1080]) {
     const beam = ctx.createRadialGradient(x, 65, 3, x, 220, 190);
     beam.addColorStop(0, "#fff3cf4b");
@@ -684,7 +693,6 @@ function drawArena(ctx, time) {
   ctx.fillRect(0, 355, 1200, 15);
 }
 
-/* The full hardwood is now covered by court markings. */
 function drawFloor(ctx) {
   const floorTop = 365;
   const floorBottom = 600;
@@ -723,12 +731,12 @@ function drawFloor(ctx) {
   ctx.fillStyle = shine;
   ctx.fillRect(0, floorTop, 1200, floorHeight);
 
-  // Full hardwood boundary.
+  // Full hardwood court boundary.
   ctx.strokeStyle = "#fff0d5";
   ctx.lineWidth = 3;
   ctx.strokeRect(1.5, floorTop + 1.5, 1197, floorHeight - 3);
 
-  // Center line.
+  // Full-height center line.
   ctx.beginPath();
   ctx.moveTo(600, floorTop);
   ctx.lineTo(600, floorBottom);
@@ -739,7 +747,7 @@ function drawFloor(ctx) {
   ctx.ellipse(600, centerY, 83, 91, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Painted keys across the hardwood.
+  // Painted keys fill the full hardwood height.
   const key = ctx.createLinearGradient(0, floorTop, 0, floorBottom);
   key.addColorStop(0, "#a54c39");
   key.addColorStop(1, "#8d3d32");
@@ -748,12 +756,13 @@ function drawFloor(ctx) {
   ctx.fillRect(0, floorTop, 205, floorHeight);
   ctx.fillRect(995, floorTop, 205, floorHeight);
 
+  // Key boundaries.
   ctx.strokeStyle = "#fff0d5";
   ctx.lineWidth = 3;
   ctx.strokeRect(0, floorTop, 205, floorHeight);
   ctx.strokeRect(995, floorTop, 205, floorHeight);
 
-  // Free-throw arcs.
+  // Free-throw arcs enlarged to the full court height.
   ctx.beginPath();
   ctx.ellipse(
     205, centerY, 67, 91,
@@ -768,9 +777,13 @@ function drawFloor(ctx) {
   );
   ctx.stroke();
 
-  // Original three-point arcs.
+  // Original oversized three-point arcs.
+  // Their large sweep intentionally extends past the court edges.
   ctx.beginPath();
-  ctx.ellipse(90, centerY, 335, 220, 0, -1.12, 1.12);
+  ctx.ellipse(
+    90, centerY, 335, 220,
+    0, -1.12, 1.12
+  );
   ctx.stroke();
 
   ctx.beginPath();
@@ -780,6 +793,7 @@ function drawFloor(ctx) {
   );
   ctx.stroke();
 
+  // Center-court branding.
   ctx.save();
   ctx.globalAlpha = .17;
   ctx.fillStyle = "#fff";
@@ -801,6 +815,7 @@ function drawHoop(ctx, x, direction) {
   ctx.fillRect(x - 9, 130, 18, 340);
   rounded(ctx, x - 31, 457, 62, 13, 5, "#252e39");
 
+  // Backboard support.
   ctx.strokeStyle = "#293745";
   ctx.lineWidth = 12;
   ctx.beginPath();
@@ -808,6 +823,7 @@ function drawHoop(ctx, x, direction) {
   ctx.lineTo(x, 183);
   ctx.stroke();
 
+  // Backboard.
   const glass = ctx.createLinearGradient(x - 6, 0, x + 7, 0);
   glass.addColorStop(0, "#dcecf2");
   glass.addColorStop(.5, "#ffffff");
@@ -825,7 +841,7 @@ function drawHoop(ctx, x, direction) {
 
   const rimX = x + direction * 34;
 
-  // Moderately wider rim.
+  // Wider rim.
   ctx.save();
   ctx.shadowColor = "#ff6a35";
   ctx.shadowBlur = 13;
@@ -836,7 +852,7 @@ function drawHoop(ctx, x, direction) {
   ctx.stroke();
   ctx.restore();
 
-  // Wider, moderately short net.
+  // Wider net, without making it excessively long.
   ctx.strokeStyle = "#f4eee4";
   ctx.lineWidth = 1.7;
 
@@ -865,6 +881,7 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
+  // Thick ink-like outline.
   ctx.strokeStyle = outline;
   ctx.lineWidth = width + 5;
   ctx.beginPath();
@@ -875,6 +892,7 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   }
   ctx.stroke();
 
+  // Colored limb.
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.beginPath();
@@ -885,6 +903,7 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   }
   ctx.stroke();
 
+  // Rounded joints.
   for (const [x, y] of points) {
     ctx.fillStyle = outline;
     ctx.beginPath();
@@ -905,12 +924,10 @@ function drawPlayer(ctx, p, time) {
   const y = p.y;
   const blue = p.side === 1;
 
-  // Player 1 blue, Player 2 red; same caricature.
   const main = blue ? "#287bd2" : "#d64b50";
   const dark = blue ? "#123d79" : "#822b34";
   const light = blue ? "#70b9ff" : "#ff9a91";
   const trim = blue ? "#e2f3ff" : "#ffe6df";
-
   const skin = "#986344";
   const outline = "#17121b";
   const face = blue ? 1 : -1;
@@ -920,6 +937,7 @@ function drawPlayer(ctx, p, time) {
   const bob = running ? Math.abs(Math.sin(time * .018)) * 2 : 0;
   const bodyY = y - bob;
 
+  // Exaggerated basketball caricature proportions.
   const shoulder = 28;
   const headWidth = 35;
   const headHeight = 40;
@@ -945,10 +963,10 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, [leftHip, leftKnee, leftFoot], 11, dark, outline);
   drawLimb(ctx, [rightHip, rightKnee, rightFoot], 11, dark, outline);
 
+  // Socks and oversized sneakers.
   rounded(ctx, leftFoot[0] - 5, bodyY - 20, 11, 11, 3, "#f8f5ef");
   rounded(ctx, rightFoot[0] - 5, bodyY - 20, 11, 11, 3, "#f8f5ef");
 
-  // Sneakers.
   ctx.save();
   ctx.shadowColor = "#0008";
   ctx.shadowBlur = 5;
@@ -958,13 +976,26 @@ function drawPlayer(ctx, p, time) {
   rounded(ctx, rightFoot[0] - 8, bodyY - 5, 27, 4, 2, main);
   ctx.restore();
 
+  // Arm poses.
   const shooting = p.action === "shoot";
+  const pumpFaking = p.action === "pumpFake";
   const jumping = p.action === "dunk" || p.action === "block";
 
   let nearArm;
   let farArm;
 
-  if (shooting) {
+  if (pumpFaking) {
+    nearArm = [
+      [x - face * 22, bodyY - 108],
+      [x - face * 27, bodyY - 145],
+      [x - face * 15, bodyY - 180]
+    ];
+    farArm = [
+      [x + face * 22, bodyY - 108],
+      [x + face * 28, bodyY - 143],
+      [x + face * 20, bodyY - 176]
+    ];
+  } else if (shooting) {
     nearArm = [
       [x - face * 22, bodyY - 108],
       [x - face * 29, bodyY - 138],
@@ -1002,7 +1033,7 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, farArm, 11, skin, outline);
   drawLimb(ctx, nearArm, 12, skin, outline);
 
-  // Shorts.
+  // Shorts with dark comic outline.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1020,7 +1051,6 @@ function drawPlayer(ctx, p, time) {
     x - 22, bodyY - 70,
     x + 22, bodyY - 28
   );
-
   shorts.addColorStop(0, light);
   shorts.addColorStop(1, dark);
 
@@ -1041,7 +1071,7 @@ function drawPlayer(ctx, p, time) {
   ctx.stroke();
   ctx.restore();
 
-  // Jersey.
+  // Jersey outer silhouette.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1058,7 +1088,6 @@ function drawPlayer(ctx, p, time) {
     x - shoulder, bodyY - 125,
     x + shoulder, bodyY - 65
   );
-
   jersey.addColorStop(0, light);
   jersey.addColorStop(.3, main);
   jersey.addColorStop(1, dark);
@@ -1078,6 +1107,7 @@ function drawPlayer(ctx, p, time) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
+  // Uniform piping and jersey number.
   ctx.strokeStyle = trim;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -1095,9 +1125,10 @@ function drawPlayer(ctx, p, time) {
   ctx.fillText("23", x, bodyY - 82);
   ctx.restore();
 
+  // Neck.
   rounded(ctx, x - 9, bodyY - 135, 18, 20, 5, skin);
 
-  // Ears.
+  // Ears with outlines.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x - face * 34, headY - 2, 10, 15, 0, 0, Math.PI * 2);
@@ -1110,7 +1141,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 34, headY - 2, 7, 12, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Large head.
+  // Huge head silhouette and shaded face.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x, headY, headWidth + 3, headHeight + 3, 0, 0, Math.PI * 2);
@@ -1120,7 +1151,6 @@ function drawPlayer(ctx, p, time) {
     x - 11, headY - 15, 3,
     x, headY, headHeight + 4
   );
-
   faceGradient.addColorStop(0, "#f0c19a");
   faceGradient.addColorStop(.55, skin);
   faceGradient.addColorStop(1, "#75452f");
@@ -1130,14 +1160,13 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x, headY, headWidth, headHeight, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Same cropped haircut on both players.
+  // Same cropped haircut, beard, and headband on both players.
   ctx.fillStyle = "#211a19";
   ctx.beginPath();
   ctx.ellipse(x, headY - 25, headWidth - 1, 17, 0, Math.PI, Math.PI * 2);
   ctx.fill();
   ctx.fillRect(x - 31, headY - 25, 62, 10);
 
-  // Same beard.
   ctx.fillStyle = "#211817";
   ctx.beginPath();
   ctx.moveTo(x - 30, headY + 1);
@@ -1148,7 +1177,6 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x - 17, headY + 29, x - 30, headY + 1);
   ctx.fill();
 
-  // Headband.
   ctx.strokeStyle = "#e9e2d4";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -1156,7 +1184,7 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x, headY - 12, x + 30, headY - 19);
   ctx.stroke();
 
-  // Eyebrows.
+  // Expressive eyebrows.
   ctx.strokeStyle = "#30201b";
   ctx.lineWidth = 6;
   ctx.lineCap = "round";
@@ -1167,7 +1195,7 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x + 16, headY - 23, x + 26, headY - 12);
   ctx.stroke();
 
-  // Eyes.
+  // Large eyes.
   for (const side of [-1, 1]) {
     const eyeX = x + side * 14;
     const eyeY = headY - 3;
@@ -1194,7 +1222,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x - face * 2, headY + 7, 7, 7, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Smile.
+  // Big expressive smile and teeth.
   ctx.fillStyle = "#241217";
   ctx.beginPath();
   ctx.ellipse(x + face * 2, headY + 25, 23, 13, 0, 0, Math.PI * 2);
@@ -1210,7 +1238,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 2, headY + 32, 13, 5, 0, 0, Math.PI);
   ctx.fill();
 
-  // Player name.
+  // Player name above the caricature.
   ctx.save();
   ctx.font = "900 14px Arial";
   ctx.textAlign = "center";
@@ -1247,14 +1275,26 @@ function drawShotMeter(ctx, x, y, charge) {
   const normalized = clamp(charge / 1.2, 0, 1);
 
   ctx.save();
+
   ctx.shadowColor = "#000";
   ctx.shadowBlur = 8;
 
-  rounded(ctx, left - 3, y - 3, w + 6, h + 6, 7, "#101722");
+  rounded(
+    ctx,
+    left - 3,
+    y - 3,
+    w + 6,
+    h + 6,
+    7,
+    "#101722"
+  );
 
   ctx.shadowBlur = 0;
 
-  const gradient = ctx.createLinearGradient(left, 0, left + w, 0);
+  const gradient = ctx.createLinearGradient(
+    left, 0, left + w, 0
+  );
+
   gradient.addColorStop(0, "#e44c45");
   gradient.addColorStop(.42, "#f0b744");
   gradient.addColorStop(.55, "#42e58b");
@@ -1264,8 +1304,14 @@ function drawShotMeter(ctx, x, y, charge) {
 
   rounded(ctx, left, y, w, h, 5, gradient);
 
+  // Smoothly interpolated release indicator.
   ctx.fillStyle = "#fff";
-  ctx.fillRect(left + w * normalized - 2, y - 4, 4, h + 8);
+  ctx.fillRect(
+    left + w * normalized - 2,
+    y - 4,
+    4,
+    h + 8
+  );
 
   ctx.textAlign = "center";
   ctx.font = "900 10px Arial";
@@ -1327,17 +1373,25 @@ function drawBasketball(ctx, x, y, time) {
 
   ctx.beginPath();
   ctx.ellipse(
-    x, y, r * .53, r,
+    x,
+    y,
+    r * .53,
+    r,
     Math.sin(time * .002) * .15,
-    0, Math.PI * 2
+    0,
+    Math.PI * 2
   );
   ctx.stroke();
 
   ctx.beginPath();
   ctx.ellipse(
-    x, y, r * .53, r,
+    x,
+    y,
+    r * .53,
+    r,
     -Math.sin(time * .002) * .15,
-    0, Math.PI * 2
+    0,
+    Math.PI * 2
   );
   ctx.stroke();
 
@@ -1363,6 +1417,39 @@ function drawBasketball(ctx, x, y, time) {
   ctx.stroke();
 }
 
+function drawJumpBallCountdown(ctx, count) {
+  if (!count || count <= 0) return;
+
+  ctx.save();
+
+  ctx.fillStyle = "#08111fdd";
+  ctx.beginPath();
+  ctx.arc(600, 270, 68, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowColor = "#ffc36e";
+  ctx.shadowBlur = 22;
+  ctx.strokeStyle = "#ffc36e";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(600, 270, 68, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.textAlign = "center";
+  ctx.font = "900 17px Arial";
+  ctx.fillStyle = "#ffc36e";
+  ctx.fillText("JUMP BALL", 600, 192);
+
+  ctx.font = "1000 82px Arial";
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = "#000";
+  ctx.shadowBlur = 12;
+  ctx.fillText(String(count), 600, 298);
+
+  ctx.restore();
+}
+
 let lastFrame = performance.now();
 
 function animate(now) {
@@ -1381,6 +1468,7 @@ function animate(now) {
     });
   }
 
+  // Interpolate positions between 30 FPS server snapshots.
   const smooth = 1 - Math.exp(-dt * 18);
 
   displayState.players = targetState.players.map((target, index) => {
@@ -1401,8 +1489,16 @@ function animate(now) {
 
   displayState.ball = {
     ...targetState.ball,
-    x: lerp(displayState.ball.x, targetState.ball.x, smooth),
-    y: lerp(displayState.ball.y, targetState.ball.y, smooth)
+    x: lerp(
+      displayState.ball.x,
+      targetState.ball.x,
+      smooth
+    ),
+    y: lerp(
+      displayState.ball.y,
+      targetState.ball.y,
+      smooth
+    )
   };
 
   displayState.clock = targetState.clock;
@@ -1426,7 +1522,15 @@ function draw(state, time) {
     drawPlayer(ctx, p, time);
   });
 
-  drawBasketball(ctx, state.ball.x, state.ball.y, time);
+  drawBasketball(
+    ctx,
+    state.ball.x,
+    state.ball.y,
+    time
+  );
+
+  // Synchronized jump-ball countdown from the server.
+  drawJumpBallCountdown(ctx, state.clock?.jumpBallCountdown);
 
   const p1 = state.players.find(p => p.side === 1);
   const p2 = state.players.find(p => p.side === 2);
