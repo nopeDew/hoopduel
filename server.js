@@ -30,6 +30,9 @@ const JUMP_POWER = 665;
 const GRAVITY = 1250;
 const BALL_GRAVITY = 820;
 
+// JUMP BALL SETTINGS
+const JUMP_BALL_TOSS_SPEED = 480;
+
 // DASH SETTINGS
 const DASH_SPEED = 850;
 const DASH_DURATION_MS = 180;
@@ -202,22 +205,33 @@ function startGame(room) {
   room.started = true;
   room.gameOver = false;
   room.overtime = 0;
+
+  // Three-second countdown before the referee-style toss.
   room.jumpBallStartsAt = now + 3000;
+  room.jumpBallTossStarted = false;
+
+  // Regulation begins at the toss, not during the countdown.
   room.periodEndsAt = room.jumpBallStartsAt + REGULATION_MS;
+
   room.lastTick = now;
   room.snapshotCounter = 0;
 
   room.players.forEach((p, index) => {
     p.score = 0;
     p.ready = false;
+
     p.x = index === 0 ? 530 : 670;
     p.y = COURT.floor;
+
     p.vx = 0;
     p.vy = 0;
+
     p.input = {};
     p.previousInput = {};
+
     p.shootStartedAt = null;
     p.dunking = false;
+
     p.action = "idle";
     p.actionUntil = 0;
     p.stunnedUntil = 0;
@@ -228,12 +242,12 @@ function startGame(room) {
     p.dashDirection = 0;
   });
 
-  // Raised opening ball for the jump-ball contest.
+  // Ball begins near the players, then gets tossed upward.
   room.ball = createBall();
   room.ball.x = 600;
-  room.ball.y = 165;
+  room.ball.y = 350;
   room.ball.previousX = 600;
-  room.ball.previousY = 165;
+  room.ball.previousY = 350;
   room.ball.vx = 0;
   room.ball.vy = 0;
 
@@ -284,7 +298,7 @@ function movePlayer(p, dt) {
 
   const grounded = p.y >= COURT.floor - 0.1;
 
-  // During a dash, temporarily override normal horizontal movement.
+  // Dash temporarily overrides normal horizontal movement.
   if (p.dashUntil > now) {
     p.vx = p.dashDirection * DASH_SPEED;
   } else {
@@ -772,6 +786,7 @@ io.on("connection", socket => {
       gameOver: false,
       overtime: 0,
       jumpBallStartsAt: null,
+      jumpBallTossStarted: false,
       periodEndsAt: 0,
       lastTick: Date.now(),
       snapshotCounter: 0
@@ -832,11 +847,12 @@ io.on("connection", socket => {
   socket.on("dash", data => {
     const room = rooms.get(socket.data.room);
 
-    if (
-      !room ||
-      !room.started ||
-      Date.now() < room.jumpBallStartsAt
-    ) return;
+    if (!room || !room.started) return;
+
+    const now = Date.now();
+
+    // A dash cannot happen before the toss starts.
+    if (now < room.jumpBallStartsAt) return;
 
     const player = room.players.find(
       p => p.id === socket.id
@@ -846,12 +862,8 @@ io.on("connection", socket => {
 
     const direction = Number(data?.direction);
 
-    // Only accept left (-1) or right (+1).
     if (direction !== -1 && direction !== 1) return;
 
-    const now = Date.now();
-
-    // No dashing while stunned or performing a dunk.
     if (
       player.stunnedUntil > now ||
       player.dunking ||
@@ -866,14 +878,12 @@ io.on("connection", socket => {
     player.lastDashAt = now;
     player.dashDirection = direction;
     player.dashUntil = now + DASH_DURATION_MS;
-
-    // Start the dash immediately.
     player.vx = direction * DASH_SPEED;
   });
 
   socket.on("input", input => {
     const room = rooms.get(socket.data.room);
-    if (!room || !room.started || Date.now() < room.jumpBallStartsAt) return;
+    if (!room || !room.started) return;
 
     const p = room.players.find(
       player => player.id === socket.id
@@ -891,6 +901,22 @@ io.on("connection", socket => {
     };
 
     const now = Date.now();
+
+    // During the countdown, remember movement and jump inputs,
+    // but do not allow shooting, stealing, or pump fakes.
+    // Physics is still frozen until the ball is tossed.
+    if (now < room.jumpBallStartsAt) {
+      p.input = {
+        left: next.left,
+        right: next.right,
+        up: next.up,
+        shoot: false,
+        steal: false,
+        pumpFake: false
+      };
+
+      return;
+    }
 
     // Pump fake only works while holding the ball and not charging a shot.
     if (
@@ -956,14 +982,14 @@ io.on("connection", socket => {
   });
 });
 
-// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS.
+// Physics runs at 60 FPS. State snapshots are sent at 30 FPS.
 setInterval(() => {
   const now = Date.now();
 
   for (const room of rooms.values()) {
     if (!room.started || room.players.length !== 2) continue;
 
-    // Keep the ball and players frozen until the jump-ball countdown ends.
+    // Freeze the players and ball during the initial countdown.
     if (now < room.jumpBallStartsAt) {
       room.snapshotCounter += 1;
 
@@ -973,6 +999,16 @@ setInterval(() => {
       }
 
       continue;
+    }
+
+    // Launch the ball upward exactly once when the countdown ends.
+    // Movement and jumping are now enabled while the ball is rising.
+    if (!room.jumpBallTossStarted) {
+      room.jumpBallTossStarted = true;
+      room.ball.vx = 0;
+      room.ball.vy = -JUMP_BALL_TOSS_SPEED;
+      room.ball.owner = null;
+      room.lastTick = now;
     }
 
     updateGameClock(room, now);
@@ -985,6 +1021,7 @@ setInterval(() => {
 
     room.lastTick = now;
 
+    // Move players immediately as the toss begins.
     for (const player of room.players) {
       movePlayer(player, dt);
     }
