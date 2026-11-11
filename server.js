@@ -172,7 +172,10 @@ function startGame(room) {
   room.players.forEach((p, index) => {
     p.score = 0;
     p.ready = false;
-    p.x = index === 0 ? 510 : 690;
+
+    // Players start closer to the raised center ball.
+    p.x = index === 0 ? 570 : 630;
+
     p.y = COURT.floor;
     p.vx = 0;
     p.vy = 0;
@@ -185,8 +188,14 @@ function startGame(room) {
     p.stunnedUntil = 0;
   });
 
-  // The ball begins loose at center court. There is no jump-ball prompt.
+  // Higher opening ball for the tip-off contest.
   room.ball = createBall();
+  room.ball.x = 600;
+  room.ball.y = 235;
+  room.ball.previousX = 600;
+  room.ball.previousY = 235;
+  room.ball.vx = 0;
+  room.ball.vy = 0;
 
   io.to(room.code).emit("gameStarted");
   emitState(room, now);
