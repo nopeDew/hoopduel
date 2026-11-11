@@ -30,6 +30,11 @@ const JUMP_POWER = 665;
 const GRAVITY = 1250;
 const BALL_GRAVITY = 820;
 
+// DASH SETTINGS
+const DASH_SPEED = 850;
+const DASH_DURATION_MS = 180;
+const DASH_COOLDOWN_MS = 1100;
+
 const TICK_RATE = 60;
 const SNAPSHOT_EVERY = 2;
 
@@ -67,6 +72,12 @@ function createPlayer(socket, name, side) {
     shootStartedAt: null,
     lastStealAt: 0,
     lastPumpFakeAt: 0,
+
+    // Dash tracking.
+    lastDashAt: 0,
+    dashUntil: 0,
+    dashDirection: 0,
+
     stunnedUntil: 0,
     action: "idle",
     actionUntil: 0,
@@ -136,8 +147,8 @@ function publicRoom(room, mySide = null) {
 }
 
 // Each player receives their own state packet.
-// Both players can see when the other player is charging,
-// but only the shooter receives their charge value and shot meter flag.
+// Both players can see the other player's charging animation,
+// but only the shooter receives their charge value and meter flag.
 function emitState(room, now = Date.now()) {
   const clock = getClock(room, now);
 
@@ -158,10 +169,10 @@ function emitState(room, now = Date.now()) {
           action: p.action,
           stunned: p.stunnedUntil > now,
 
-          // Public animation state: the opponent can see raised arms.
+          // Public animation state.
           charging,
 
-          // Private timing data: only the shooter receives this.
+          // Private shot meter data.
           showShotMeter: isViewer && charging,
           charge: isViewer && charging
             ? clamp((now - p.shootStartedAt) / 1000, 0, 1.2)
@@ -210,6 +221,11 @@ function startGame(room) {
     p.action = "idle";
     p.actionUntil = 0;
     p.stunnedUntil = 0;
+
+    // Reset dash cooldown for a new game.
+    p.lastDashAt = 0;
+    p.dashUntil = 0;
+    p.dashDirection = 0;
   });
 
   // Raised opening ball for the jump-ball contest.
@@ -228,8 +244,7 @@ function startGame(room) {
 function followHolder(ball, player) {
   const direction = player.side === 1 ? 1 : -1;
 
-  // Raise the ball during either a pump fake or a normal shot charge.
-  // The opponent sees the ball move, but not the shooter's timing meter.
+  // Raise the ball during a pump fake or normal shot charge.
   if (
     player.shootStartedAt !== null ||
     player.action === "pumpFake"
@@ -268,22 +283,28 @@ function movePlayer(p, dt) {
     (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
 
   const grounded = p.y >= COURT.floor - 0.1;
-  const acceleration = grounded ? PLAYER_ACCEL : AIR_ACCEL;
 
-  if (direction) {
-    const target = direction * PLAYER_SPEED;
-
-    p.vx += clamp(
-      target - p.vx,
-      -acceleration * dt,
-      acceleration * dt
-    );
+  // During a dash, temporarily override normal horizontal movement.
+  if (p.dashUntil > now) {
+    p.vx = p.dashDirection * DASH_SPEED;
   } else {
-    const friction = (grounded ? FRICTION : AIR_FRICTION) * dt;
+    const acceleration = grounded ? PLAYER_ACCEL : AIR_ACCEL;
 
-    p.vx = Math.abs(p.vx) <= friction
-      ? 0
-      : p.vx - Math.sign(p.vx) * friction;
+    if (direction) {
+      const target = direction * PLAYER_SPEED;
+
+      p.vx += clamp(
+        target - p.vx,
+        -acceleration * dt,
+        acceleration * dt
+      );
+    } else {
+      const friction = (grounded ? FRICTION : AIR_FRICTION) * dt;
+
+      p.vx = Math.abs(p.vx) <= friction
+        ? 0
+        : p.vx - Math.sign(p.vx) * friction;
+    }
   }
 
   p.x = clamp(p.x + p.vx * dt, 35, COURT.width - 35);
@@ -596,7 +617,7 @@ function scoreBasket(room, scorer, points) {
   room.ball.shotBySide = null;
 
   // Put the ball just above the rim, then let it visibly fall
-  // through the extended net before possession changes.
+  // through the net before possession changes.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
@@ -726,7 +747,6 @@ function updateGameClock(room, now) {
     return;
   }
 
-  // Tied games receive another full 15-second overtime.
   room.overtime += 1;
   room.periodEndsAt = now + OVERTIME_MS;
 
@@ -808,6 +828,49 @@ io.on("connection", socket => {
     io.to(room.code).emit("roomUpdate", publicRoom(room));
   });
 
+  // SERVER-AUTHORITATIVE DASH
+  socket.on("dash", data => {
+    const room = rooms.get(socket.data.room);
+
+    if (
+      !room ||
+      !room.started ||
+      Date.now() < room.jumpBallStartsAt
+    ) return;
+
+    const player = room.players.find(
+      p => p.id === socket.id
+    );
+
+    if (!player) return;
+
+    const direction = Number(data?.direction);
+
+    // Only accept left (-1) or right (+1).
+    if (direction !== -1 && direction !== 1) return;
+
+    const now = Date.now();
+
+    // No dashing while stunned or performing a dunk.
+    if (
+      player.stunnedUntil > now ||
+      player.dunking ||
+      player.action === "dunk"
+    ) return;
+
+    // Server-side cooldown prevents repeated dash requests.
+    if (now - player.lastDashAt < DASH_COOLDOWN_MS) {
+      return;
+    }
+
+    player.lastDashAt = now;
+    player.dashDirection = direction;
+    player.dashUntil = now + DASH_DURATION_MS;
+
+    // Start the dash immediately.
+    player.vx = direction * DASH_SPEED;
+  });
+
   socket.on("input", input => {
     const room = rooms.get(socket.data.room);
     if (!room || !room.started || Date.now() < room.jumpBallStartsAt) return;
@@ -830,7 +893,6 @@ io.on("connection", socket => {
     const now = Date.now();
 
     // Pump fake only works while holding the ball and not charging a shot.
-    // The edge check means holding the key does not repeatedly trigger it.
     if (
       next.pumpFake &&
       !p.input.pumpFake &&
@@ -894,8 +956,7 @@ io.on("connection", socket => {
   });
 });
 
-// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS
-// to reduce traffic while client-side interpolation stays smooth.
+// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS.
 setInterval(() => {
   const now = Date.now();
 
