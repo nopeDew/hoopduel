@@ -38,6 +38,13 @@ const DASH_SPEED = 850;
 const DASH_DURATION_MS = 180;
 const DASH_COOLDOWN_MS = 1100;
 
+// BALL PHYSICS SETTINGS
+const BALL_BOUNCE_MULTIPLIER = 0.43;
+const BALL_MIN_BOUNCE_SPEED = 65;
+const BALL_GROUND_FRICTION = 0.93;
+const BALL_STOP_SPEED = 18;
+const BALL_PICKUP_RADIUS = 88;
+
 const TICK_RATE = 60;
 const SNAPSHOT_EVERY = 2;
 
@@ -172,7 +179,6 @@ function emitState(room, now = Date.now()) {
           action: p.action,
           stunned: p.stunnedUntil > now,
 
-          // Public animation state.
           charging,
 
           // Private shot meter data.
@@ -206,13 +212,10 @@ function startGame(room) {
   room.gameOver = false;
   room.overtime = 0;
 
-  // Three-second countdown before the referee-style toss.
   room.jumpBallStartsAt = now + 3000;
   room.jumpBallTossStarted = false;
 
-  // Regulation begins at the toss, not during the countdown.
   room.periodEndsAt = room.jumpBallStartsAt + REGULATION_MS;
-
   room.lastTick = now;
   room.snapshotCounter = 0;
 
@@ -236,7 +239,6 @@ function startGame(room) {
     p.actionUntil = 0;
     p.stunnedUntil = 0;
 
-    // Reset dash cooldown for a new game.
     p.lastDashAt = 0;
     p.dashUntil = 0;
     p.dashDirection = 0;
@@ -351,34 +353,55 @@ function movePlayer(p, dt) {
   }
 }
 
+// UPDATED BALL PHYSICS:
+// The ball bounces when it hits the floor with enough speed.
+// Small bounces settle into a roll, and rolling friction stops
+// the ball instead of allowing it to glide endlessly.
 function updateFreeBall(ball, dt) {
   ball.previousX = ball.x;
   ball.previousY = ball.y;
 
   ball.x += ball.vx * dt;
   ball.y += ball.vy * dt;
+
   ball.vy += BALL_GRAVITY * dt;
+
+  // Light air resistance.
   ball.vx *= Math.pow(0.999, dt * 60);
 
   if (ball.y >= COURT.ballFloor) {
     ball.y = COURT.ballFloor;
-    ball.vy *= -0.43;
 
-    if (Math.abs(ball.vy) < 32) {
+    // Only bounce if the ball hits the floor with meaningful speed.
+    if (ball.vy > BALL_MIN_BOUNCE_SPEED) {
+      ball.vy = -ball.vy * BALL_BOUNCE_MULTIPLIER;
+    } else {
+      // Settle the ball onto the floor.
       ball.vy = 0;
-    }
 
-    if (Math.abs(ball.vx) < 8 && ball.vy === 0) {
-      ball.vx = 0;
+      // Stronger rolling friction while on the floor.
+      ball.vx *= Math.pow(
+        BALL_GROUND_FRICTION,
+        dt * 60
+      );
+
+      // Fully stop tiny remaining movement.
+      if (Math.abs(ball.vx) < BALL_STOP_SPEED) {
+        ball.vx = 0;
+      }
     }
   }
 
+  // Court side boundaries.
   if (ball.x < 20 || ball.x > COURT.width - 20) {
     ball.vx *= -0.55;
     ball.x = clamp(ball.x, 20, COURT.width - 20);
   }
 }
 
+// UPDATED PICKUP RANGE:
+// Measure against the player's lower body instead of the head.
+// This lets players collect balls sitting on the floor.
 function tryPickupBall(room) {
   const ball = room.ball;
 
@@ -389,15 +412,22 @@ function tryPickupBall(room) {
     Date.now() < ball.pickupLockoutUntil
   ) return;
 
-  const nearest = room.players.map(player => ({
-    player,
-    distance: Math.hypot(
-      player.x - ball.x,
-      (player.y - 110) - ball.y
-    )
-  })).sort((a, b) => a.distance - b.distance)[0];
+  const nearest = room.players.map(player => {
+    // Pickup point is around the player's hands/lower torso.
+    const pickupY = player.y - 35;
 
-  if (nearest && nearest.distance < 64) {
+    const distance = Math.hypot(
+      player.x - ball.x,
+      pickupY - ball.y
+    );
+
+    return {
+      player,
+      distance
+    };
+  }).sort((a, b) => a.distance - b.distance)[0];
+
+  if (nearest && nearest.distance < BALL_PICKUP_RADIUS) {
     ball.owner = nearest.player.id;
     ball.vx = 0;
     ball.vy = 0;
@@ -630,8 +660,6 @@ function scoreBasket(room, scorer, points) {
   room.ball.owner = null;
   room.ball.shotBySide = null;
 
-  // Put the ball just above the rim, then let it visibly fall
-  // through the net before possession changes.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
@@ -851,7 +879,6 @@ io.on("connection", socket => {
 
     const now = Date.now();
 
-    // A dash cannot happen before the toss starts.
     if (now < room.jumpBallStartsAt) return;
 
     const player = room.players.find(
@@ -870,7 +897,6 @@ io.on("connection", socket => {
       player.action === "dunk"
     ) return;
 
-    // Server-side cooldown prevents repeated dash requests.
     if (now - player.lastDashAt < DASH_COOLDOWN_MS) {
       return;
     }
@@ -902,9 +928,8 @@ io.on("connection", socket => {
 
     const now = Date.now();
 
-    // During the countdown, remember movement and jump inputs,
-    // but do not allow shooting, stealing, or pump fakes.
-    // Physics is still frozen until the ball is tossed.
+    // Remember movement and jump inputs during the countdown.
+    // Movement and physics remain frozen until the toss starts.
     if (now < room.jumpBallStartsAt) {
       p.input = {
         left: next.left,
@@ -918,7 +943,7 @@ io.on("connection", socket => {
       return;
     }
 
-    // Pump fake only works while holding the ball and not charging a shot.
+    // Pump fake.
     if (
       next.pumpFake &&
       !p.input.pumpFake &&
@@ -931,6 +956,7 @@ io.on("connection", socket => {
       p.actionUntil = now + 500;
     }
 
+    // Begin charging a shot.
     if (
       next.shoot &&
       !p.input.shoot &&
@@ -939,6 +965,7 @@ io.on("connection", socket => {
       p.shootStartedAt = Date.now();
     }
 
+    // Release the shot.
     if (!next.shoot && p.input.shoot) {
       if (
         p.shootStartedAt !== null &&
@@ -989,7 +1016,7 @@ setInterval(() => {
   for (const room of rooms.values()) {
     if (!room.started || room.players.length !== 2) continue;
 
-    // Freeze the players and ball during the initial countdown.
+    // Freeze players and ball during the initial countdown.
     if (now < room.jumpBallStartsAt) {
       room.snapshotCounter += 1;
 
@@ -1001,8 +1028,7 @@ setInterval(() => {
       continue;
     }
 
-    // Launch the ball upward exactly once when the countdown ends.
-    // Movement and jumping are now enabled while the ball is rising.
+    // Toss the ball upward exactly once when the countdown ends.
     if (!room.jumpBallTossStarted) {
       room.jumpBallTossStarted = true;
       room.ball.vx = 0;
@@ -1021,7 +1047,7 @@ setInterval(() => {
 
     room.lastTick = now;
 
-    // Move players immediately as the toss begins.
+    // Movement begins as the toss starts.
     for (const player of room.players) {
       movePlayer(player, dt);
     }
