@@ -63,8 +63,158 @@ h1 {
 }
 
 #lobby {
-  max-width: 600px;
+  width: min(980px, 100%);
+  max-width: 980px;
   margin: auto;
+}
+
+#characterPicker {
+  margin: 16px 0 18px;
+  padding: 14px;
+  border: 1px solid #3c526f;
+  border-radius: 15px;
+  background: #0b1524a8;
+}
+
+.picker-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.picker-heading strong {
+  letter-spacing: 1.5px;
+  font-size: 13px;
+}
+
+.picker-heading span {
+  color: #aebed1;
+  font-size: 11px;
+}
+
+#characterGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.character-card {
+  display: block;
+  min-width: 0;
+  padding: 11px 9px;
+  text-align: left;
+  color: #f6f7fb;
+  background: linear-gradient(155deg, #263b57, #142238);
+  border: 1px solid #506987;
+  border-radius: 13px;
+  box-shadow: none;
+  transition: border-color .12s, transform .12s, background .12s;
+}
+
+.character-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #ffca83;
+}
+
+.character-card.selected {
+  border: 2px solid #ffc36e;
+  background: linear-gradient(155deg, #40516b, #1b2b40);
+}
+
+.character-card:disabled:not(.selected) {
+  opacity: .42;
+  filter: grayscale(.55);
+}
+
+.character-token {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  border: 2px solid #ffffff88;
+  color: white;
+  font-size: 13px;
+  font-weight: 1000;
+  text-shadow: 0 2px 4px #000;
+  background: #35506e;
+}
+
+.character-token.lebron { background: linear-gradient(135deg,#d5a45b,#6b3a25); }
+.character-token.steph { background: linear-gradient(135deg,#edc36c,#3e5790); }
+.character-token.jordan { background: linear-gradient(135deg,#d8d8d8,#a72f37); }
+.character-token.shaq { background: linear-gradient(135deg,#b88c60,#242b37); }
+.character-token.kareem { background: linear-gradient(135deg,#e0d0a0,#36664f); }
+
+.character-name {
+  display: block;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.2;
+  min-height: 31px;
+}
+
+.character-role {
+  display: block;
+  min-height: 28px;
+  color: #b9c8d9;
+  font-size: 10px;
+  line-height: 1.3;
+  margin-top: 3px;
+}
+
+.character-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  margin-top: 8px;
+  color: #dce7f4;
+  font-size: 9px;
+  text-align: center;
+}
+
+.character-stats b {
+  display: block;
+  color: #ffc36e;
+  font-size: 13px;
+}
+
+.character-ability {
+  display: block;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid #ffffff20;
+  color: #ffda9b;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.character-taken {
+  display: block;
+  margin-top: 5px;
+  color: #ff9b91;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+#abilityStatus {
+  color: #ffda9b;
+  font-weight: 900;
+  padding: 5px 8px;
+  border: 1px solid #ffca8344;
+  border-radius: 8px;
+  background: #101b2b;
+}
+
+@media (max-width: 780px) {
+  #characterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .character-name { min-height: 0; }
+  .character-role { min-height: 0; }
 }
 
 input,
@@ -316,6 +466,15 @@ canvas {
       </div>
       <div class="code" id="codeText"></div>
       <div class="players" id="players"></div>
+
+      <div id="characterPicker">
+        <div class="picker-heading">
+          <strong>CHOOSE YOUR LEGEND</strong>
+          <span>No duplicate picks · Choose before readying up</span>
+        </div>
+        <div id="characterGrid"></div>
+      </div>
+
       <button id="ready">I'M READY</button>
     </div>
   </section>
@@ -336,10 +495,10 @@ canvas {
     </div>
 
     <div class="controls">
-      <span><strong>Player 1:</strong> A/D move · Double-tap A/D to dash · W jump · S pump fake</span>
-      <span><strong>Player 2:</strong> ←/→ move · Double-tap ←/→ to dash · ↑ jump · ↓ pump fake</span>
-      <span><strong>Both:</strong> Hold/release Space to shoot · Shift to steal or stun</span>
-      <span>Jump during the opening toss to contest the ball · Jump near the basket to dunk · Jump into a shot to block</span>
+      <span><strong>Both players:</strong> A/D move · Double-tap A/D to dash · W jump · S pump fake</span>
+      <span><strong>Both:</strong> Hold/release Space to shoot · Shift to steal · E special ability</span>
+      <span><strong id="abilityStatus">E: SPECIAL ABILITY</strong></span>
+      <span>Jump near the basket to dunk · Jump into a shot to block</span>
     </div>
 
     <button id="returnLobby" class="hidden">BACK TO LOBBY / REMATCH</button>
@@ -358,48 +517,27 @@ let targetState = null;
 let displayState = null;
 let message = "";
 let messageUntil = 0;
+let currentRoom = null;
 
-const keys = {};
+const CHARACTER_INFO = [
+  { id:"lebron", name:"LeBron James", number:"23", role:"The all-around force", speed:8, shooting:8, power:9, ability:"Chase Down", desc:"Extend your block reach for 4 seconds." },
+  { id:"steph", name:"Stephen Curry", number:"30", role:"The deep-range sniper", speed:8, shooting:10, power:5, ability:"Range Extender", desc:"Makes long shots much more accurate for 4 seconds." },
+  { id:"jordan", name:"Michael Jordan", number:"23", role:"The explosive scorer", speed:10, shooting:9, power:9, ability:"First Step", desc:"Gain a major speed boost for 4 seconds." },
+  { id:"shaq", name:"Shaquille O'Neal", number:"34", role:"The dominant big man", speed:5, shooting:5, power:10, ability:"Diesel Mode", desc:"Greatly increases your airborne dunk range for 4 seconds." },
+  { id:"kareem", name:"Kareem Abdul-Jabbar", number:"33", role:"The unstoppable post scorer", speed:7, shooting:8, power:10, ability:"Skyhook", desc:"Improves shot accuracy and reduces defensive pressure for 4 seconds." }
+];
 
-// DASH INPUT SETTINGS
-const DOUBLE_TAP_WINDOW = 260;
-
-const lastDirectionTap = {
-  left: 0,
-  right: 0
+const AVATAR_LOOKS = {
+  lebron: { skin:"#986344", hair:"receding", beard:"full", headband:true, scaleX:1.02, scaleY:1.02, shoulder:1.03, head:1.0 },
+  steph: { skin:"#c58b65", hair:"curls", beard:"goatee", headband:false, scaleX:.98, scaleY:.99, shoulder:.96, head:.98 },
+  jordan: { skin:"#89553b", hair:"bald", beard:"none", headband:false, scaleX:1.00, scaleY:1.01, shoulder:1.02, head:1.0 },
+  shaq: { skin:"#75452f", hair:"bald", beard:"goatee", headband:false, scaleX:1.20, scaleY:1.01, shoulder:1.22, head:1.06 },
+  kareem: { skin:"#936347", hair:"afro", beard:"mustache", headband:false, scaleX:.98, scaleY:1.07, shoulder:.98, head:1.02 }
 };
 
-function handleDashTap(key) {
-  if (!started) return;
-
-  let direction = null;
-
-  if (mySide === 1) {
-    if (key === "a") direction = -1;
-    if (key === "d") direction = 1;
-  } else if (mySide === 2) {
-    if (key === "arrowleft") direction = -1;
-    if (key === "arrowright") direction = 1;
-  }
-
-  if (direction === null) return;
-
-  const now = performance.now();
-  const side = direction === -1 ? "left" : "right";
-
-  if (
-    lastDirectionTap[side] !== 0 &&
-    now - lastDirectionTap[side] <= DOUBLE_TAP_WINDOW
-  ) {
-    lastDirectionTap[side] = 0;
-
-    socket.emit("dash", {
-      direction
-    });
-  } else {
-    lastDirectionTap[side] = now;
-  }
-}
+const keys = {};
+const DOUBLE_TAP_WINDOW = 260;
+const lastDirectionTap = { left:0, right:0 };
 
 $("create").onclick = () => {
   socket.emit("createRoom", {
@@ -448,16 +586,22 @@ document.addEventListener("fullscreenchange", () => {
 
 socket.on("roomJoined", room => {
   mySide = room.mySide || 1;
+  currentRoom = room;
 
   $("roomInfo").classList.remove("hidden");
   $("codeText").textContent = room.code;
-  $("status").textContent = "Room ready. Share the code with your opponent.";
+  $("status").textContent = "Room ready. Pick your legend, then share the code with your opponent.";
 
   updatePlayers(room.players);
 });
 
 socket.on("roomUpdate", room => {
+  currentRoom = room;
   updatePlayers(room.players);
+});
+
+socket.on("characterSelectError", text => {
+  $("status").textContent = text;
 });
 
 function updatePlayers(players) {
@@ -465,9 +609,74 @@ function updatePlayers(players) {
     .slice()
     .sort((a, b) => a.side - b.side)
     .map(p =>
-      `PLAYER ${p.side}: ${p.name} ${p.ready ? "✓ READY" : ""}`
+      `PLAYER ${p.side}: ${p.name} (${p.characterName || "No legend"}) ${p.ready ? "✓ READY" : ""}`
     )
     .join("   •   ");
+
+  renderCharacterCards(players);
+}
+
+function renderCharacterCards(players) {
+  if (!mySide || !$("characterGrid")) return;
+  const mine = players.find(p => p.side === mySide);
+  const opponent = players.find(p => p.side !== mySide);
+  const grid = $("characterGrid");
+  grid.replaceChildren();
+
+  for (const character of CHARACTER_INFO) {
+    const taken = !!opponent && opponent.characterId === character.id;
+    const selected = !!mine && mine.characterId === character.id;
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `character-card${selected ? " selected" : ""}`;
+    card.disabled = taken || !!mine?.ready;
+    card.setAttribute("aria-pressed", selected ? "true" : "false");
+
+    const token = document.createElement("span");
+    token.className = `character-token ${character.id}`;
+    token.textContent = character.number;
+
+    const name = document.createElement("span");
+    name.className = "character-name";
+    name.textContent = character.name;
+
+    const role = document.createElement("span");
+    role.className = "character-role";
+    role.textContent = character.role;
+
+    const stats = document.createElement("span");
+    stats.className = "character-stats";
+    stats.innerHTML = `<span>SPD<b>${character.speed}</b></span><span>SHOT<b>${character.shooting}</b></span><span>POW<b>${character.power}</b></span>`;
+
+    const ability = document.createElement("span");
+    ability.className = "character-ability";
+    ability.textContent = `E · ${character.ability}`;
+
+    const description = document.createElement("span");
+    description.className = "character-role";
+    description.textContent = character.desc;
+
+    card.append(token, name, role, stats, ability, description);
+
+    if (taken) {
+      const takenLabel = document.createElement("span");
+      takenLabel.className = "character-taken";
+      takenLabel.textContent = "PICKED BY OPPONENT";
+      card.append(takenLabel);
+    } else if (selected) {
+      const selectedLabel = document.createElement("span");
+      selectedLabel.className = "character-taken";
+      selectedLabel.style.color = "#9ef0bd";
+      selectedLabel.textContent = mine.ready ? "READY ✓" : "YOUR PICK ✓";
+      card.append(selectedLabel);
+    }
+
+    card.addEventListener("click", () => {
+      socket.emit("selectCharacter", { characterId:character.id });
+      $("status").textContent = `Selecting ${character.name}...`;
+    });
+    grid.append(card);
+  }
 }
 
 socket.on("joinError", msg => {
@@ -483,7 +692,6 @@ socket.on("gameStarted", () => {
   started = true;
   targetState = null;
   displayState = null;
-
   lastDirectionTap.left = 0;
   lastDirectionTap.right = 0;
 
@@ -517,6 +725,10 @@ socket.on("stolen", data => {
 
 socket.on("stunned", data => {
   announce(`${data.player.toUpperCase()} IS STUNNED!`);
+});
+
+socket.on("abilityUsed", data => {
+  announce(`${data.player.toUpperCase()} ACTIVATED ${data.ability.toUpperCase()}!`);
 });
 
 socket.on("shotTaken", data => {
@@ -556,19 +768,33 @@ socket.on("state", state => {
   targetState = state;
 });
 
+function handleDashTap(key) {
+  if (!started) return;
+
+  // Both players use the same local control layout.
+  let direction = null;
+  if (key === "a") direction = -1;
+  if (key === "d") direction = 1;
+  if (direction === null) return;
+
+  const now = performance.now();
+  const side = direction === -1 ? "left" : "right";
+  if (lastDirectionTap[side] && now - lastDirectionTap[side] <= DOUBLE_TAP_WINDOW) {
+    lastDirectionTap[side] = 0;
+    socket.emit("dash", { direction });
+  } else {
+    lastDirectionTap[side] = now;
+  }
+}
+
 window.addEventListener("keydown", e => {
-  if (
-    ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)
-  ) {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) {
     e.preventDefault();
   }
-
   if (e.repeat) return;
 
   const key = e.key.toLowerCase();
-
   handleDashTap(key);
-
   keys[key] = true;
   sendInput();
 });
@@ -579,37 +805,25 @@ window.addEventListener("keyup", e => {
 });
 
 window.addEventListener("blur", () => {
-  for (const key in keys) {
-    keys[key] = false;
-  }
-
+  for (const key in keys) keys[key] = false;
   lastDirectionTap.left = 0;
   lastDirectionTap.right = 0;
-
   sendInput();
 });
 
 function sendInput() {
   if (!started) return;
 
+  // Player 1 and Player 2 intentionally share the exact same controls.
+  // Each player is on their own browser/device, so the same keys work for both sides.
   socket.emit("input", {
-    left: mySide === 1
-      ? !!keys.a
-      : !!keys.arrowleft,
-
-    right: mySide === 1
-      ? !!keys.d
-      : !!keys.arrowright,
-
-    up: mySide === 1
-      ? !!keys.w
-      : !!keys.arrowup,
-
+    left: !!keys.a,
+    right: !!keys.d,
+    up: !!keys.w,
     shoot: !!keys[" "],
     steal: !!keys.shift,
-    pumpFake: mySide === 1
-      ? !!keys.s
-      : !!keys.arrowdown
+    pumpFake: !!keys.s,
+    ability: !!keys.e
   });
 }
 
@@ -644,6 +858,7 @@ function drawArena(ctx, time) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1200, 470);
 
+  // Dark rafters.
   const roof = ctx.createLinearGradient(0, 0, 0, 100);
   roof.addColorStop(0, "#050a12");
   roof.addColorStop(1, "#1b2a3c");
@@ -660,6 +875,7 @@ function drawArena(ctx, time) {
     ctx.stroke();
   }
 
+  // Stylized crowd seating.
   const crowdColors = [
     "#d45c53", "#e1b66c", "#577eac",
     "#d9dce2", "#438d78", "#8b6db2"
@@ -685,6 +901,7 @@ function drawArena(ctx, time) {
     }
   }
 
+  // LED ribbon board.
   const ribbon = ctx.createLinearGradient(0, 0, 1200, 0);
   ribbon.addColorStop(0, "#142c44");
   ribbon.addColorStop(.5, "#244d67");
@@ -702,6 +919,7 @@ function drawArena(ctx, time) {
   ctx.textAlign = "center";
   ctx.fillText("HOOP DUEL  •  HOME COURT  •  HOOP DUEL", 600, 283);
 
+  // Arena panels.
   for (const x of [60, 280, 500, 720, 940, 1160]) {
     const board = ctx.createLinearGradient(x - 50, 0, x + 50, 0);
     board.addColorStop(0, "#14334c");
@@ -720,6 +938,7 @@ function drawArena(ctx, time) {
     ctx.fillText("HD", x, 329);
   }
 
+  // Spotlights.
   for (const x of [120, 360, 600, 840, 1080]) {
     const beam = ctx.createRadialGradient(x, 65, 3, x, 220, 190);
     beam.addColorStop(0, "#fff3cf4b");
@@ -750,6 +969,7 @@ function drawFloor(ctx) {
   ctx.fillStyle = wood;
   ctx.fillRect(0, floorTop, 1200, floorHeight);
 
+  // Hardwood planks.
   for (let y = floorTop + 5; y < floorBottom; y += 23) {
     const row = Math.floor((y - floorTop) / 23);
 
@@ -773,19 +993,23 @@ function drawFloor(ctx) {
   ctx.fillStyle = shine;
   ctx.fillRect(0, floorTop, 1200, floorHeight);
 
+  // Full hardwood court boundary.
   ctx.strokeStyle = "#fff0d5";
   ctx.lineWidth = 3;
   ctx.strokeRect(1.5, floorTop + 1.5, 1197, floorHeight - 3);
 
+  // Full-height center line.
   ctx.beginPath();
   ctx.moveTo(600, floorTop);
   ctx.lineTo(600, floorBottom);
   ctx.stroke();
 
+  // Center circle.
   ctx.beginPath();
   ctx.ellipse(600, centerY, 83, 91, 0, 0, Math.PI * 2);
   ctx.stroke();
 
+  // Painted keys fill the full hardwood height.
   const key = ctx.createLinearGradient(0, floorTop, 0, floorBottom);
   key.addColorStop(0, "#a54c39");
   key.addColorStop(1, "#8d3d32");
@@ -794,11 +1018,13 @@ function drawFloor(ctx) {
   ctx.fillRect(0, floorTop, 205, floorHeight);
   ctx.fillRect(995, floorTop, 205, floorHeight);
 
+  // Key boundaries.
   ctx.strokeStyle = "#fff0d5";
   ctx.lineWidth = 3;
   ctx.strokeRect(0, floorTop, 205, floorHeight);
   ctx.strokeRect(995, floorTop, 205, floorHeight);
 
+  // Free-throw arcs enlarged to the full court height.
   ctx.beginPath();
   ctx.ellipse(
     205, centerY, 67, 91,
@@ -813,6 +1039,8 @@ function drawFloor(ctx) {
   );
   ctx.stroke();
 
+  // Original oversized three-point arcs.
+  // Their large sweep intentionally extends past the court edges.
   ctx.beginPath();
   ctx.ellipse(
     90, centerY, 335, 220,
@@ -827,6 +1055,7 @@ function drawFloor(ctx) {
   );
   ctx.stroke();
 
+  // Center-court branding.
   ctx.save();
   ctx.globalAlpha = .17;
   ctx.fillStyle = "#fff";
@@ -835,7 +1064,6 @@ function drawFloor(ctx) {
   ctx.fillText("HOOP DUEL", 600, centerY + 20);
   ctx.restore();
 }
-
 function drawHoop(ctx, x, direction) {
   ctx.save();
 
@@ -848,6 +1076,7 @@ function drawHoop(ctx, x, direction) {
   ctx.fillRect(x - 9, 130, 18, 340);
   rounded(ctx, x - 31, 457, 62, 13, 5, "#252e39");
 
+  // Backboard support.
   ctx.strokeStyle = "#293745";
   ctx.lineWidth = 12;
   ctx.beginPath();
@@ -855,6 +1084,7 @@ function drawHoop(ctx, x, direction) {
   ctx.lineTo(x, 183);
   ctx.stroke();
 
+  // Backboard.
   const glass = ctx.createLinearGradient(x - 6, 0, x + 7, 0);
   glass.addColorStop(0, "#dcecf2");
   glass.addColorStop(.5, "#ffffff");
@@ -872,6 +1102,7 @@ function drawHoop(ctx, x, direction) {
 
   const rimX = x + direction * 34;
 
+  // Wider rim.
   ctx.save();
   ctx.shadowColor = "#ff6a35";
   ctx.shadowBlur = 13;
@@ -882,6 +1113,7 @@ function drawHoop(ctx, x, direction) {
   ctx.stroke();
   ctx.restore();
 
+  // Wider net, without making it excessively long.
   ctx.strokeStyle = "#f4eee4";
   ctx.lineWidth = 1.7;
 
@@ -910,6 +1142,7 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
+  // Thick ink-like outline.
   ctx.strokeStyle = outline;
   ctx.lineWidth = width + 5;
   ctx.beginPath();
@@ -920,6 +1153,7 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   }
   ctx.stroke();
 
+  // Colored limb.
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.beginPath();
@@ -930,6 +1164,7 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   }
   ctx.stroke();
 
+  // Rounded joints.
   for (const [x, y] of points) {
     ctx.fillStyle = outline;
     ctx.beginPath();
@@ -949,25 +1184,35 @@ function drawPlayer(ctx, p, time) {
   const x = p.x;
   const y = p.y;
   const blue = p.side === 1;
+  const characterId = p.characterId || "lebron";
+  const look = AVATAR_LOOKS[characterId] || AVATAR_LOOKS.lebron;
 
   const main = blue ? "#287bd2" : "#d64b50";
   const dark = blue ? "#123d79" : "#822b34";
   const light = blue ? "#70b9ff" : "#ff9a91";
   const trim = blue ? "#e2f3ff" : "#ffe6df";
-  const skin = "#986344";
+  const skin = look.skin;
   const outline = "#17121b";
   const face = blue ? 1 : -1;
+
+  // Each legend has a distinct silhouette as well as different uniform number.
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(look.scaleX, look.scaleY);
+  ctx.translate(-x, -y);
 
   const running = Math.abs(p.vx) > 12;
   const stride = running ? Math.sin(time * .018) * 9 : 0;
   const bob = running ? Math.abs(Math.sin(time * .018)) * 2 : 0;
   const bodyY = y - bob;
 
-  const shoulder = 28;
-  const headWidth = 35;
-  const headHeight = 40;
+  // Exaggerated basketball caricature proportions.
+  const shoulder = 28 * look.shoulder;
+  const headWidth = 35 * look.head;
+  const headHeight = 40 * look.head;
   const headY = bodyY - 145;
 
+  // Ground shadow.
   ctx.save();
   ctx.globalAlpha = clamp(1 - (470 - y) / 250, .2, .4);
   ctx.fillStyle = "#120e0b";
@@ -976,6 +1221,7 @@ function drawPlayer(ctx, p, time) {
   ctx.fill();
   ctx.restore();
 
+  // Legs.
   const leftHip = [x - 9, bodyY - 42];
   const rightHip = [x + 9, bodyY - 42];
   const leftKnee = [x - 15 + stride * .5, bodyY - 24];
@@ -986,6 +1232,7 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, [leftHip, leftKnee, leftFoot], 11, dark, outline);
   drawLimb(ctx, [rightHip, rightKnee, rightFoot], 11, dark, outline);
 
+  // Socks and oversized sneakers.
   rounded(ctx, leftFoot[0] - 5, bodyY - 20, 11, 11, 3, "#f8f5ef");
   rounded(ctx, rightFoot[0] - 5, bodyY - 20, 11, 11, 3, "#f8f5ef");
 
@@ -998,15 +1245,15 @@ function drawPlayer(ctx, p, time) {
   rounded(ctx, rightFoot[0] - 8, bodyY - 5, 27, 4, 2, main);
   ctx.restore();
 
+  // Arm poses.
   const shooting = p.action === "shoot";
   const pumpFaking = p.action === "pumpFake";
-  const charging = !!p.charging;
   const jumping = p.action === "dunk" || p.action === "block";
 
   let nearArm;
   let farArm;
 
-  if (pumpFaking || charging) {
+  if (pumpFaking) {
     nearArm = [
       [x - face * 22, bodyY - 108],
       [x - face * 27, bodyY - 145],
@@ -1055,6 +1302,7 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, farArm, 11, skin, outline);
   drawLimb(ctx, nearArm, 12, skin, outline);
 
+  // Shorts with dark comic outline.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1092,6 +1340,7 @@ function drawPlayer(ctx, p, time) {
   ctx.stroke();
   ctx.restore();
 
+  // Jersey outer silhouette.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1127,6 +1376,7 @@ function drawPlayer(ctx, p, time) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
+  // Uniform piping and jersey number.
   ctx.strokeStyle = trim;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -1141,11 +1391,13 @@ function drawPlayer(ctx, p, time) {
   ctx.textAlign = "center";
   ctx.shadowColor = "#0009";
   ctx.shadowBlur = 3;
-  ctx.fillText("23", x, bodyY - 82);
+  ctx.fillText(p.jerseyNumber || CHARACTER_INFO.find(c => c.id === characterId)?.number || "23", x, bodyY - 82);
   ctx.restore();
 
+  // Neck.
   rounded(ctx, x - 9, bodyY - 135, 18, 20, 5, skin);
 
+  // Ears with outlines.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x - face * 34, headY - 2, 10, 15, 0, 0, Math.PI * 2);
@@ -1158,6 +1410,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 34, headY - 2, 7, 12, 0, 0, Math.PI * 2);
   ctx.fill();
 
+  // Huge head silhouette and shaded face.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x, headY, headWidth + 3, headHeight + 3, 0, 0, Math.PI * 2);
@@ -1176,29 +1429,73 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x, headY, headWidth, headHeight, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#211a19";
-  ctx.beginPath();
-  ctx.ellipse(x, headY - 25, headWidth - 1, 17, 0, Math.PI, Math.PI * 2);
-  ctx.fill();
-  ctx.fillRect(x - 31, headY - 25, 62, 10);
+  // Hair and facial hair are tailored to the selected legend.
+  ctx.fillStyle = "#201916";
+  if (look.hair === "receding") {
+    ctx.beginPath();
+    ctx.ellipse(x, headY - 25, headWidth - 4, 11, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x - 27, headY - 26, 54, 8);
+  } else if (look.hair === "curls") {
+    const curls = [-27,-19,-11,-3,5,13,21,29];
+    for (const dx of curls) {
+      ctx.beginPath();
+      ctx.arc(x + dx, headY - 31 + Math.abs(dx) * .12, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillRect(x - 28, headY - 30, 56, 9);
+  } else if (look.hair === "afro") {
+    ctx.beginPath();
+    ctx.ellipse(x, headY - 28, headWidth + 7, 19, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    for (const dx of [-28,-20,-12,-4,4,12,20,28]) {
+      ctx.beginPath();
+      ctx.arc(x + dx, headY - 40 + Math.abs(dx) * .1, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
-  ctx.fillStyle = "#211817";
-  ctx.beginPath();
-  ctx.moveTo(x - 30, headY + 1);
-  ctx.quadraticCurveTo(x - 31, headY + 35, x - 11, headY + 47);
-  ctx.quadraticCurveTo(x, headY + 55, x + 11, headY + 47);
-  ctx.quadraticCurveTo(x + 31, headY + 35, x + 30, headY + 1);
-  ctx.quadraticCurveTo(x + 17, headY + 29, x, headY + 29);
-  ctx.quadraticCurveTo(x - 17, headY + 29, x - 30, headY + 1);
-  ctx.fill();
+  if (look.beard === "full") {
+    ctx.fillStyle = "#211817";
+    ctx.beginPath();
+    ctx.moveTo(x - 30, headY + 1);
+    ctx.quadraticCurveTo(x - 31, headY + 35, x - 11, headY + 47);
+    ctx.quadraticCurveTo(x, headY + 55, x + 11, headY + 47);
+    ctx.quadraticCurveTo(x + 31, headY + 35, x + 30, headY + 1);
+    ctx.quadraticCurveTo(x + 17, headY + 29, x, headY + 29);
+    ctx.quadraticCurveTo(x - 17, headY + 29, x - 30, headY + 1);
+    ctx.fill();
+  } else if (look.beard === "goatee") {
+    ctx.fillStyle = "#211817";
+    ctx.beginPath();
+    ctx.ellipse(x, headY + 36, 9, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - 16, headY + 22);
+    ctx.quadraticCurveTo(x, headY + 14, x + 16, headY + 22);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#211817";
+    ctx.stroke();
+  } else if (look.beard === "mustache") {
+    ctx.strokeStyle = "#211817";
+    ctx.lineWidth = 6;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - 17, headY + 21);
+    ctx.quadraticCurveTo(x - 7, headY + 13, x, headY + 21);
+    ctx.quadraticCurveTo(x + 9, headY + 13, x + 18, headY + 21);
+    ctx.stroke();
+  }
 
-  ctx.strokeStyle = "#e9e2d4";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(x - 30, headY - 19);
-  ctx.quadraticCurveTo(x, headY - 12, x + 30, headY - 19);
-  ctx.stroke();
-
+  if (look.headband) {
+    ctx.strokeStyle = "#e9e2d4";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(x - 30, headY - 19);
+    ctx.quadraticCurveTo(x, headY - 12, x + 30, headY - 19);
+    ctx.stroke();
+  }
+  // Expressive eyebrows.
   ctx.strokeStyle = "#30201b";
   ctx.lineWidth = 6;
   ctx.lineCap = "round";
@@ -1209,6 +1506,7 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x + 16, headY - 23, x + 26, headY - 12);
   ctx.stroke();
 
+  // Large eyes.
   for (const side of [-1, 1]) {
     const eyeX = x + side * 14;
     const eyeY = headY - 3;
@@ -1224,6 +1522,7 @@ function drawPlayer(ctx, p, time) {
     ctx.fill();
   }
 
+  // Nose.
   ctx.fillStyle = "#75452f";
   ctx.beginPath();
   ctx.ellipse(x + face * 2, headY + 10, 11, 12, 0, 0, Math.PI * 2);
@@ -1234,6 +1533,7 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x - face * 2, headY + 7, 7, 7, 0, 0, Math.PI * 2);
   ctx.fill();
 
+  // Big expressive smile and teeth.
   ctx.fillStyle = "#241217";
   ctx.beginPath();
   ctx.ellipse(x + face * 2, headY + 25, 23, 13, 0, 0, Math.PI * 2);
@@ -1249,13 +1549,14 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 2, headY + 32, 13, 5, 0, 0, Math.PI);
   ctx.fill();
 
+  // Player name above the caricature.
   ctx.save();
   ctx.font = "900 14px Arial";
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff";
   ctx.shadowColor = "#000";
   ctx.shadowBlur = 7;
-  ctx.fillText(p.name, x, headY - 49);
+  ctx.fillText(p.characterName || p.name, x, headY - 49);
   ctx.restore();
 
   if (p.stunned) {
@@ -1274,13 +1575,20 @@ function drawPlayer(ctx, p, time) {
   }
 
   if (p.showShotMeter && p.side === mySide) {
-    drawShotMeter(
-      ctx,
-      x,
-      headY - 62,
-      p.displayCharge ?? p.charge
-    );
+    drawShotMeter(ctx, x, headY - 62, p.displayCharge ?? p.charge);
   }
+
+  if (p.abilityActive) {
+    ctx.save();
+    ctx.strokeStyle = "#ffdc74";
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = .85;
+    ctx.beginPath();
+    ctx.ellipse(x, headY - 5, 47, 55, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function drawShotMeter(ctx, x, y, charge) {
@@ -1319,6 +1627,7 @@ function drawShotMeter(ctx, x, y, charge) {
 
   rounded(ctx, left, y, w, h, 5, gradient);
 
+  // Smoothly interpolated release indicator.
   ctx.fillStyle = "#fff";
   ctx.fillRect(
     left + w * normalized - 2,
@@ -1436,11 +1745,13 @@ function drawJumpBallCountdown(ctx, count) {
 
   ctx.save();
 
+  // Dark circular background.
   ctx.fillStyle = "#08111fdd";
   ctx.beginPath();
   ctx.arc(600, 270, 68, 0, Math.PI * 2);
   ctx.fill();
 
+  // Amber outline and glow.
   ctx.shadowColor = "#ffc36e";
   ctx.shadowBlur = 22;
   ctx.strokeStyle = "#ffc36e";
@@ -1482,6 +1793,7 @@ function animate(now) {
     });
   }
 
+  // Interpolate positions between 30 FPS server snapshots.
   const smooth = 1 - Math.exp(-dt * 18);
 
   displayState.players = targetState.players.map((target, index) => {
@@ -1542,16 +1854,28 @@ function draw(state, time) {
     time
   );
 
+  // Synchronized jump-ball countdown from the server.
   drawJumpBallCountdown(ctx, state.clock?.jumpBallCountdown);
 
   const p1 = state.players.find(p => p.side === 1);
   const p2 = state.players.find(p => p.side === 2);
 
   $("p1").textContent =
-    `${p1?.name || "PLAYER 1"}: ${p1?.score || 0}`;
+    `${p1?.characterName || p1?.name || "PLAYER 1"}: ${p1?.score || 0}`;
 
   $("p2").textContent =
-    `${p2?.name || "PLAYER 2"}: ${p2?.score || 0}`;
+    `${p2?.characterName || p2?.name || "PLAYER 2"}: ${p2?.score || 0}`;
+
+  const mine = state.players.find(p => p.side === mySide);
+  if (mine) {
+    const cooldown = Math.ceil((mine.abilityCooldownMs || 0) / 1000);
+    const active = Math.ceil((mine.abilityRemainingMs || 0) / 1000);
+    $("abilityStatus").textContent = mine.abilityActive
+      ? `E · ${mine.ability.toUpperCase()} ACTIVE · ${active}s`
+      : cooldown > 0
+        ? `E · ${mine.ability.toUpperCase()} · ${cooldown}s COOLDOWN`
+        : `E · ${mine.ability.toUpperCase()} READY`;
+  }
 
   if (state.clock) {
     $("clock").textContent = state.clock.label;
