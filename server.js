@@ -38,9 +38,9 @@ const DASH_SPEED = 850;
 const DASH_DURATION_MS = 180;
 const DASH_COOLDOWN_MS = 1100;
 
-// Responsive, server-authoritative steals.
-const STEAL_RANGE = 58;
-const STEAL_COOLDOWN_MS = 700;
+// Deliberate steals: very close range, with a real cooldown.
+const STEAL_RANGE = 38;
+const STEAL_COOLDOWN_MS = 1300;
 
 // The shot meter reaches its green band faster than before.
 const SHOT_CHARGE_RATE = 1.5;
@@ -48,24 +48,24 @@ const ABILITY_COOLDOWN_MS = 14000;
 
 const CHARACTERS = {
   lebron: {
-    name: "LeBron James", number: "23", speed: 1.00, shooting: 1.04,
-    power: 1.10, jump: 1.04, ability: "Chase Down", abilityId: "chasedown"
+    name: "LeBron James", number: "23", icon: "🛡️",
+    ability: "Chase Down", abilityId: "chasedown"
   },
   steph: {
-    name: "Stephen Curry", number: "30", speed: 1.02, shooting: 1.15,
-    power: 0.88, jump: 0.96, ability: "Range Extender", abilityId: "range"
+    name: "Stephen Curry", number: "30", icon: "🎯",
+    ability: "Range Extender", abilityId: "range"
   },
   jordan: {
-    name: "Michael Jordan", number: "23", speed: 1.10, shooting: 1.10,
-    power: 1.08, jump: 1.10, ability: "First Step", abilityId: "firststep"
+    name: "Michael Jordan", number: "23", icon: "⚡",
+    ability: "First Step", abilityId: "firststep"
   },
   shaq: {
-    name: "Shaquille O'Neal", number: "34", speed: 0.86, shooting: 0.86,
-    power: 1.25, jump: 0.92, ability: "Diesel Mode", abilityId: "diesel"
+    name: "Shaquille O'Neal", number: "34", icon: "💪",
+    ability: "Diesel Mode", abilityId: "diesel"
   },
   kareem: {
-    name: "Kareem Abdul-Jabbar", number: "33", speed: 0.94, shooting: 1.06,
-    power: 1.13, jump: 1.00, ability: "Skyhook", abilityId: "skyhook"
+    name: "Kareem Abdul-Jabbar", number: "33", icon: "🏀",
+    ability: "Skyhook", abilityId: "skyhook"
   }
 };
 
@@ -223,9 +223,15 @@ function emitState(room, now = Date.now()) {
           characterName: character.name,
           jerseyNumber: character.number,
           ability: character.ability,
+          abilityIcon: character.icon,
           abilityActive: p.abilityUntil > now,
           abilityRemainingMs: Math.max(0, p.abilityUntil - now),
           abilityCooldownMs: Math.max(0, p.abilityCooldownUntil - now),
+          abilityFill: clamp(
+            1 - Math.max(0, p.abilityCooldownUntil - now) / ABILITY_COOLDOWN_MS,
+            0,
+            1
+          ),
           x: p.x,
           y: p.y,
           vx: p.vx,
@@ -339,10 +345,9 @@ function movePlayer(p, dt) {
     (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
 
   const grounded = p.y >= COURT.floor - 0.1;
-  const character = characterFor(p);
   const activeSpeedBoost = p.characterId === "jordan" && p.abilityUntil > now ? 1.38 : 1;
-  const speed = PLAYER_SPEED * character.speed * activeSpeedBoost;
-  const acceleration = (grounded ? PLAYER_ACCEL : AIR_ACCEL) * character.speed * activeSpeedBoost;
+  const speed = PLAYER_SPEED * activeSpeedBoost;
+  const acceleration = (grounded ? PLAYER_ACCEL : AIR_ACCEL) * activeSpeedBoost;
 
   if (p.dashUntil > now) {
     p.vx = p.dashDirection * DASH_SPEED;
@@ -364,7 +369,7 @@ function movePlayer(p, dt) {
   p.x = clamp(p.x + p.vx * dt, 35, COURT.width - 35);
 
   if (p.input.up && !p.previousInput.up && grounded) {
-    p.vy = -JUMP_POWER * character.jump;
+    p.vy = -JUMP_POWER;
     p.action = "jump";
   }
 
@@ -455,9 +460,8 @@ function shootBall(room, p, heldMilliseconds) {
   const distance = Math.abs(hoopX - p.x);
   const airborne = p.y < COURT.floor - 24;
 
-  const character = characterFor(p);
   const dieselActive = p.characterId === "shaq" && p.abilityUntil > Date.now();
-  const dunkRange = 125 + Math.max(0, character.power - 1) * 50 + (dieselActive ? 85 : 0);
+  const dunkRange = 125 + (dieselActive ? 85 : 0);
 
   // A close-range airborne shot becomes a dunk.
   if (distance < dunkRange && airborne) {
@@ -491,7 +495,6 @@ function shootBall(room, p, heldMilliseconds) {
         0.08,
         0.92
       );
-  timingQuality = clamp(timingQuality * character.shooting, 0.08, 1);
   if (kareemSkyhookActive) timingQuality = clamp(timingQuality + 0.16, 0.08, 1);
 
   const effectiveDistance = stephRangeActive ? distance * 0.72 : distance;
@@ -605,33 +608,38 @@ function handleBlocks(room) {
 
 function attemptSteal(room, player, now = Date.now()) {
   const ball = room.ball;
+  const opponent = room.players.find(p => p.id !== player.id);
+
+  // Shift only steals possession from the opponent who is actually holding it.
+  // It never stuns someone when the ball is loose or when you already own it.
+  if (
+    !opponent ||
+    ball.owner !== opponent.id ||
+    ball.dunking ||
+    ball.pendingScore ||
+    opponent.stunnedUntil > now ||
+    opponent.shootStartedAt !== null ||
+    player.stunnedUntil > now ||
+    player.dunking ||
+    player.shootStartedAt !== null
+  ) return;
+
   if (now - player.lastStealAt < STEAL_COOLDOWN_MS) return;
 
-  const opponent = room.players.find(p => p.id !== player.id);
-  if (!opponent || opponent.stunnedUntil > now) return;
-
-  const distance = Math.hypot(player.x - opponent.x, player.y - opponent.y);
-  if (distance > STEAL_RANGE) return;
-
-  // Only successful-range attempts consume the cooldown. The action is
-  // evaluated immediately on the Shift key-down packet, not on every tick.
+  // Spend the attempt even when the defender presses too early or from too far away.
   player.lastStealAt = now;
 
-  if (ball.owner === opponent.id) {
-    ball.owner = player.id;
-    ball.vx = 0;
-    ball.vy = 0;
-    player.action = "steal";
-    player.actionUntil = now + 250;
-    io.to(room.code).emit("stolen", { player: player.name });
-  } else if (ball.owner !== player.id && !ball.pendingScore) {
-    opponent.stunnedUntil = now + 900;
-    opponent.vx = 0;
-    opponent.vy = 0;
-    opponent.action = "stunned";
-    opponent.actionUntil = now + 900;
-    io.to(room.code).emit("stunned", { player: opponent.name });
-  }
+  const horizontalDistance = Math.abs(player.x - opponent.x);
+  const verticalDistance = Math.abs(player.y - opponent.y);
+  if (horizontalDistance > STEAL_RANGE || verticalDistance > 42) return;
+
+  ball.owner = player.id;
+  ball.vx = 0;
+  ball.vy = 0;
+  player.action = "steal";
+  player.actionUntil = now + 250;
+
+  io.to(room.code).emit("stolen", { player: player.name });
 }
 
 function activateAbility(room, player, now = Date.now()) {
@@ -889,7 +897,6 @@ io.on("connection", socket => {
     const takenByOpponent = room.players.some(
       other => other.id !== player.id && other.characterId === characterId
     );
-
     if (takenByOpponent) {
       socket.emit("characterSelectError", "That legend is already picked. Choose another.");
       return;
@@ -925,17 +932,10 @@ io.on("connection", socket => {
 
     const player = room.players.find(p => p.id === socket.id);
     if (!player) return;
-
     const direction = Number(data?.direction);
     const now = Date.now();
-
     if (direction !== -1 && direction !== 1) return;
-
-    if (
-      player.stunnedUntil > now ||
-      player.dunking ||
-      now - player.lastDashAt < DASH_COOLDOWN_MS
-    ) return;
+    if (player.stunnedUntil > now || player.dunking || now - player.lastDashAt < DASH_COOLDOWN_MS) return;
 
     player.lastDashAt = now;
     player.dashDirection = direction;
@@ -955,7 +955,6 @@ io.on("connection", socket => {
 
     const now = Date.now();
     const countdown = !room.jumpBallTossStarted && now < room.jumpBallStartsAt;
-
     const next = {
       left: !!input.left,
       right: !!input.right,
@@ -994,9 +993,9 @@ io.on("connection", socket => {
       p.lastPumpFakeAt = now;
       p.action = "pumpFake";
       p.actionUntil = now + 500;
+
     }
 
-    // Start charging a shot.
     if (
       next.shoot &&
       !p.input.shoot &&
@@ -1005,7 +1004,6 @@ io.on("connection", socket => {
       p.shootStartedAt = Date.now();
     }
 
-    // Release the shot.
     if (!next.shoot && p.input.shoot) {
       if (
         p.shootStartedAt !== null &&
@@ -1060,12 +1058,10 @@ setInterval(() => {
     // Freeze physics during the countdown while preserving queued movement inputs.
     if (now < room.jumpBallStartsAt) {
       room.snapshotCounter += 1;
-
       if (room.snapshotCounter >= SNAPSHOT_EVERY) {
         room.snapshotCounter = 0;
         emitState(room, now);
       }
-
       continue;
     }
 
