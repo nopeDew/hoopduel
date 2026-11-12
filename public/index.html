@@ -6,13 +6,20 @@
 <title>HOOP DUEL</title>
 
 <style>
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
   min-height: 100vh;
   display: block;
-  background: radial-gradient(ellipse at 50% 0%, #344d70 0%, #131e30 55%, #080d17 100%);
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    #344d70 0%,
+    #131e30 55%,
+    #080d17 100%
+  );
   color: #f6f7fb;
   font-family: Inter, system-ui, Arial, sans-serif;
 }
@@ -189,19 +196,30 @@ h1 {
 }
 
 @media (max-width: 780px) {
-  #characterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .character-name { min-height: 0; }
-  .character-role { min-height: 0; }
+  #characterGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .character-name {
+    min-height: 0;
+  }
+
+  .character-role {
+    min-height: 0;
+  }
 }
 
-input, button {
+input,
+button,
+select {
   border: 0;
   border-radius: 11px;
   padding: 13px 15px;
   font: inherit;
 }
 
-input {
+input,
+select {
   background: #0c1524;
   color: white;
   border: 1px solid #43536b;
@@ -226,6 +244,21 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  color: #cbd7e6;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mode-row select {
+  flex: 0 0 150px;
+}
+
 .row {
   display: flex;
   gap: 10px;
@@ -238,7 +271,9 @@ button:disabled {
   margin: 13px 0;
 }
 
-.hidden { display: none !important; }
+.hidden {
+  display: none !important;
+}
 
 .code {
   font-size: 30px;
@@ -321,8 +356,13 @@ canvas {
   margin: 10px 4px 0;
 }
 
-.controls strong { color: #fff; }
-#returnLobby { margin-top: 12px; }
+.controls strong {
+  color: #fff;
+}
+
+#returnLobby {
+  margin-top: 12px;
+}
 
 #game:fullscreen {
   width: 100vw;
@@ -336,7 +376,9 @@ canvas {
   border: 0;
 }
 
-#game:fullscreen .game-top { flex: none; }
+#game:fullscreen .game-top {
+  flex: none;
+}
 
 #game:fullscreen .canvas-wrap {
   flex: 1;
@@ -359,11 +401,18 @@ canvas {
   background: #080f1b;
 }
 
-#game:fullscreen .controls { display: none; }
+#game:fullscreen .controls {
+  display: none;
+}
 
 @media (max-width: 650px) {
-  .wrap { padding: 6px; }
-  .panel { padding: 10px; }
+  .wrap {
+    padding: 6px;
+  }
+
+  .panel {
+    padding: 10px;
+  }
 
   .brand {
     align-items: flex-start;
@@ -371,11 +420,27 @@ canvas {
     flex-direction: column;
   }
 
-  .game-top { align-items: flex-start; }
-  .hud { font-size: 11px; gap: 5px; }
-  #clock { font-size: 12px; }
-  .controls { font-size: 10px; }
-  #fullscreen { font-size: 10px; padding: 8px; }
+  .game-top {
+    align-items: flex-start;
+  }
+
+  .hud {
+    font-size: 11px;
+    gap: 5px;
+  }
+
+  #clock {
+    font-size: 12px;
+  }
+
+  .controls {
+    font-size: 10px;
+  }
+
+  #fullscreen {
+    font-size: 10px;
+    padding: 8px;
+  }
 }
 </style>
 </head>
@@ -390,10 +455,18 @@ canvas {
 
   <section class="panel" id="lobby">
     <p style="color:#c7d3e3;margin-top:0">
-      Create a private court, invite your opponent, and take over the hardwood.
+      Create a private court, invite your opponents, and take over the hardwood.
     </p>
 
     <input id="name" maxlength="14" placeholder="Your player name" value="Player">
+
+    <div class="mode-row">
+      <label for="gameMode">GAME MODE</label>
+      <select id="gameMode">
+        <option value="1v1">1v1 · Solo</option>
+        <option value="2v2">2v2 · Teams</option>
+      </select>
+    </div>
 
     <div class="row" style="margin-top:12px">
       <button id="create" type="button">CREATE COURT</button>
@@ -409,6 +482,7 @@ canvas {
       </div>
       <div class="code" id="codeText"></div>
       <div class="players" id="players"></div>
+      <div class="players" id="roomModeText"></div>
 
       <div id="characterPicker">
         <div class="picker-heading">
@@ -438,8 +512,8 @@ canvas {
     </div>
 
     <div class="controls">
-      <span><strong>Both players:</strong> A/D move · Double-tap A/D to dash · W jump · S pump fake</span>
-      <span><strong>Both players:</strong> Hold/release Space to shoot · Shift to steal · E special ability</span>
+      <span><strong>All players:</strong> A/D move · Double-tap A/D to dash · W jump · S pump fake</span>
+      <span id="actionControls"><strong>Controls:</strong> Hold/release Space to shoot · Shift to steal/stun · E special ability</span>
       <span><strong id="abilityStatus">E: SPECIAL ABILITY · WATCH YOUR CIRCLE</strong></span>
       <span>Jump near the basket to dunk · Jump into a shot to block</span>
     </div>
@@ -482,7 +556,6 @@ const keys = {};
 const DOUBLE_TAP_WINDOW = 260;
 const lastDirectionTap = { left:0, right:0 };
 
-// Explicit connection feedback.
 socket.on("connect", () => {
   $("status").textContent = "Connected. Create a room or enter your friend's code.";
 });
@@ -499,7 +572,8 @@ $("create").addEventListener("click", () => {
 
   $("status").textContent = "Creating your court...";
   socket.emit("createRoom", {
-    name: $("name").value
+    name: $("name").value,
+    mode: $("gameMode").value
   });
 });
 
@@ -532,7 +606,7 @@ $("ready").addEventListener("click", () => {
 
   socket.emit("ready");
   $("ready").disabled = true;
-  $("status").textContent = "Waiting for your opponent...";
+  $("status").textContent = "Waiting for everyone to ready up...";
 });
 
 $("returnLobby").addEventListener("click", () => {
@@ -567,14 +641,16 @@ socket.on("roomJoined", room => {
 
   $("roomInfo").classList.remove("hidden");
   $("codeText").textContent = room.code;
-  $("status").textContent = "Room ready. Pick your legend, then share the code with your opponent.";
+  $("gameMode").value = room.mode || "1v1";
+  $("gameMode").disabled = true;
+  $("status").textContent = "Room ready. Pick your legend, then share the code with your opponents.";
 
-  updatePlayers(room.players);
+  updatePlayers(room);
 });
 
 socket.on("roomUpdate", room => {
   currentRoom = room;
-  updatePlayers(room.players);
+  updatePlayers(room);
 });
 
 socket.on("characterSelectError", text => {
@@ -585,14 +661,25 @@ socket.on("joinError", msg => {
   $("status").textContent = msg;
 });
 
-function updatePlayers(players) {
+function updatePlayers(room) {
+  const players = room.players || [];
+  const capacity = room.capacity || 2;
+
   $("players").textContent = players
     .slice()
-    .sort((a, b) => a.side - b.side)
-    .map(p =>
-      `PLAYER ${p.side}: ${p.name} (${p.characterName || "No legend"}) ${p.ready ? "✓ READY" : ""}`
-    )
+    .sort((a, b) => a.side - b.side || a.seat - b.seat)
+    .map(p => `${room.mode === "2v2" ? `TEAM ${p.side === 1 ? "BLUE" : "RED"} · PLAYER ${p.seat}` : `PLAYER ${p.side}`} · ${p.name} (${p.characterName || "No legend"}) ${p.ready ? "✓ READY" : ""}`)
     .join("   •   ");
+
+  $("roomModeText").textContent = `${room.mode || "1v1"} MATCH · ${players.length}/${capacity} PLAYERS CONNECTED`;
+  $("ready").disabled = !!players.find(p => p.id === socket.id)?.ready;
+  $("ready").textContent = players.length < capacity
+    ? `I'M READY · WAITING FOR ${capacity - players.length} MORE`
+    : "I'M READY";
+
+  $("actionControls").innerHTML = room.mode === "2v2"
+    ? "<strong>Controls:</strong> Hold/release Space to shoot · Q pass to teammate · Shift to steal/stun · E special ability"
+    : "<strong>Controls:</strong> Hold/release Space to shoot · Shift to steal/stun · E special ability";
 
   renderCharacterCards(players);
 }
@@ -600,20 +687,20 @@ function updatePlayers(players) {
 function renderCharacterCards(players) {
   if (!mySide || !$("characterGrid")) return;
 
-  const mine = players.find(p => p.side === mySide);
-  const opponent = players.find(p => p.side !== mySide);
+  const mine = players.find(p => p.id === socket.id);
   const grid = $("characterGrid");
-
   grid.replaceChildren();
 
   for (const character of CHARACTER_INFO) {
-    const taken = !!opponent && opponent.characterId === character.id;
+    const pickedBy = players.find(
+      p => p.id !== mine?.id && p.characterId === character.id
+    );
     const selected = !!mine && mine.characterId === character.id;
 
     const card = document.createElement("button");
     card.type = "button";
     card.className = `character-card${selected ? " selected" : ""}`;
-    card.disabled = taken || !!mine?.ready;
+    card.disabled = !!pickedBy || !!mine?.ready;
     card.setAttribute("aria-pressed", selected ? "true" : "false");
 
     const token = document.createElement("span");
@@ -638,10 +725,10 @@ function renderCharacterCards(players) {
 
     card.append(token, name, role, ability, description);
 
-    if (taken) {
+    if (pickedBy) {
       const takenLabel = document.createElement("span");
       takenLabel.className = "character-taken";
-      takenLabel.textContent = "PICKED BY OPPONENT";
+      takenLabel.textContent = `PICKED BY ${pickedBy.name.toUpperCase()}`;
       card.append(takenLabel);
     } else if (selected) {
       const selectedLabel = document.createElement("span");
@@ -652,10 +739,7 @@ function renderCharacterCards(players) {
     }
 
     card.addEventListener("click", () => {
-      socket.emit("selectCharacter", {
-        characterId: character.id
-      });
-
+      socket.emit("selectCharacter", { characterId: character.id });
       $("status").textContent = `Selecting ${character.name}...`;
     });
 
@@ -671,7 +755,6 @@ socket.on("gameStarted", () => {
   started = true;
   targetState = null;
   displayState = null;
-
   lastDirectionTap.left = 0;
   lastDirectionTap.right = 0;
 
@@ -705,6 +788,10 @@ socket.on("stolen", data => {
 
 socket.on("stunned", data => {
   announce(`${data.player.toUpperCase()} IS STUNNED!`);
+});
+
+socket.on("passThrown", data => {
+  announce(`${data.player.toUpperCase()} PASSES TO ${data.teammate.toUpperCase()}!`);
 });
 
 socket.on("abilityUsed", data => {
@@ -752,6 +839,7 @@ function handleDashTap(key) {
   if (!started) return;
 
   let direction = null;
+
   if (key === "a") direction = -1;
   if (key === "d") direction = 1;
   if (direction === null) return;
@@ -779,6 +867,7 @@ window.addEventListener("keydown", e => {
 
   const key = e.key.toLowerCase();
   handleDashTap(key);
+
   keys[key] = true;
   sendInput();
 });
@@ -795,6 +884,7 @@ window.addEventListener("blur", () => {
 
   lastDirectionTap.left = 0;
   lastDirectionTap.right = 0;
+
   sendInput();
 });
 
@@ -808,6 +898,7 @@ function sendInput() {
     shoot: !!keys[" "],
     steal: !!keys.shift,
     pumpFake: !!keys.s,
+    pass: !!keys.q,
     ability: !!keys.e
   });
 }
@@ -960,6 +1051,7 @@ function drawFloor(ctx) {
           : "#572b1710";
 
       ctx.fillRect(x, y, 150, 23);
+
       ctx.strokeStyle = "#633b2366";
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, 150, 23);
@@ -1000,19 +1092,31 @@ function drawFloor(ctx) {
   ctx.strokeRect(995, floorTop, 205, floorHeight);
 
   ctx.beginPath();
-  ctx.ellipse(205, centerY, 67, 91, 0, -Math.PI / 2, Math.PI / 2);
+  ctx.ellipse(
+    205, centerY, 67, 91,
+    0, -Math.PI / 2, Math.PI / 2
+  );
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(995, centerY, 67, 91, 0, Math.PI / 2, Math.PI * 1.5);
+  ctx.ellipse(
+    995, centerY, 67, 91,
+    0, Math.PI / 2, Math.PI * 1.5
+  );
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(90, centerY, 335, 220, 0, -1.12, 1.12);
+  ctx.ellipse(
+    90, centerY, 335, 220,
+    0, -1.12, 1.12
+  );
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(1110, centerY, 335, 220, 0, Math.PI - 1.12, Math.PI + 1.12);
+  ctx.ellipse(
+    1110, centerY, 335, 220,
+    0, Math.PI - 1.12, Math.PI + 1.12
+  );
   ctx.stroke();
 
   ctx.save();
@@ -1117,9 +1221,16 @@ function abilityColorFor(p) {
   return colors[p.characterId] || "#ffc36e";
 }
 
+// Every player's ability meter is visible to both teams.
+// Teammates get separate indicators in 2v2.
 function drawAbilityIndicators(ctx, players) {
   for (const p of players) {
-    const cx = p.side === 1 ? 82 : 1118;
+    const cx = currentRoom?.mode === "2v2"
+      ? (p.side === 1
+          ? (p.seat === 1 ? 82 : 175)
+          : (p.seat === 1 ? 1118 : 1025))
+      : (p.side === 1 ? 82 : 1118);
+
     const cy = 58;
     const radius = 35;
 
@@ -1262,7 +1373,7 @@ function drawPlayer(ctx, p, time) {
   const outline = "#17121b";
   const face = blue ? 1 : -1;
 
-  // Smaller players, keeping their court positions unchanged.
+  // Players are scaled down without changing their court positions.
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(look.scaleX * 0.78, look.scaleY * 0.78);
@@ -1646,7 +1757,7 @@ function drawPlayer(ctx, p, time) {
     ctx.restore();
   }
 
-  if (p.showShotMeter && p.side === mySide) {
+  if (p.showShotMeter) {
     drawShotMeter(
       ctx,
       x,
@@ -1676,14 +1787,26 @@ function drawShotMeter(ctx, x, y, charge) {
   const normalized = clamp(charge / 1.2, 0, 1);
 
   ctx.save();
+
   ctx.shadowColor = "#000";
   ctx.shadowBlur = 8;
 
-  rounded(ctx, left - 3, y - 3, w + 6, h + 6, 7, "#101722");
+  rounded(
+    ctx,
+    left - 3,
+    y - 3,
+    w + 6,
+    h + 6,
+    7,
+    "#101722"
+  );
 
   ctx.shadowBlur = 0;
 
-  const gradient = ctx.createLinearGradient(left, 0, left + w, 0);
+  const gradient = ctx.createLinearGradient(
+    left, 0, left + w, 0
+  );
+
   gradient.addColorStop(0, "#e44c45");
   gradient.addColorStop(.42, "#f0b744");
   gradient.addColorStop(.55, "#42e58b");
@@ -1694,7 +1817,12 @@ function drawShotMeter(ctx, x, y, charge) {
   rounded(ctx, left, y, w, h, 5, gradient);
 
   ctx.fillStyle = "#fff";
-  ctx.fillRect(left + w * normalized - 2, y - 4, 4, h + 8);
+  ctx.fillRect(
+    left + w * normalized - 2,
+    y - 4,
+    4,
+    h + 8
+  );
 
   ctx.textAlign = "center";
   ctx.font = "900 10px Arial";
@@ -1717,7 +1845,11 @@ function drawBasketball(ctx, x, y, time) {
   ctx.fill();
   ctx.restore();
 
-  const ball = ctx.createRadialGradient(x - 9, y - 11, 2, x + 1, y + 1, r + 3);
+  const ball = ctx.createRadialGradient(
+    x - 9, y - 11, 2,
+    x + 1, y + 1, r + 3
+  );
+
   ball.addColorStop(0, "#fff0ad");
   ball.addColorStop(.25, "#ffd16d");
   ball.addColorStop(.65, "#ff9c35");
@@ -1751,16 +1883,36 @@ function drawBasketball(ctx, x, y, time) {
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(x, y, r * .53, r, Math.sin(time * .002) * .15, 0, Math.PI * 2);
+  ctx.ellipse(
+    x,
+    y,
+    r * .53,
+    r,
+    Math.sin(time * .002) * .15,
+    0,
+    Math.PI * 2
+  );
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(x, y, r * .53, r, -Math.sin(time * .002) * .15, 0, Math.PI * 2);
+  ctx.ellipse(
+    x,
+    y,
+    r * .53,
+    r,
+    -Math.sin(time * .002) * .15,
+    0,
+    Math.PI * 2
+  );
   ctx.stroke();
 
   ctx.restore();
 
-  const shine = ctx.createRadialGradient(x - 9, y - 10, 1, x - 5, y - 7, 13);
+  const shine = ctx.createRadialGradient(
+    x - 9, y - 10, 1,
+    x - 5, y - 7, 13
+  );
+
   shine.addColorStop(0, "#ffffffb8");
   shine.addColorStop(1, "#ffffff00");
 
@@ -1869,21 +2021,33 @@ function draw(state, time) {
   drawHoop(ctx, 1152, -1);
   drawAbilityIndicators(ctx, state.players);
 
-  state.players.forEach(p => drawPlayer(ctx, p, time));
+  state.players.forEach(p => {
+    drawPlayer(ctx, p, time);
+  });
 
-  drawBasketball(ctx, state.ball.x, state.ball.y, time);
+  drawBasketball(
+    ctx,
+    state.ball.x,
+    state.ball.y,
+    time
+  );
+
   drawJumpBallCountdown(ctx, state.clock?.jumpBallCountdown);
 
-  const p1 = state.players.find(p => p.side === 1);
-  const p2 = state.players.find(p => p.side === 2);
+  const blueScore = state.players
+    .filter(p => p.side === 1)
+    .reduce((total, p) => total + (p.score || 0), 0);
 
-  $("p1").textContent =
-    `${p1?.characterName || p1?.name || "PLAYER 1"}: ${p1?.score || 0}`;
+  const redScore = state.players
+    .filter(p => p.side === 2)
+    .reduce((total, p) => total + (p.score || 0), 0);
 
-  $("p2").textContent =
-    `${p2?.characterName || p2?.name || "PLAYER 2"}: ${p2?.score || 0}`;
+  const isTeamMode = currentRoom?.mode === "2v2";
 
-  const mine = state.players.find(p => p.side === mySide);
+  $("p1").textContent = `${isTeamMode ? "TEAM BLUE" : "PLAYER 1"}: ${blueScore}`;
+  $("p2").textContent = `${isTeamMode ? "TEAM RED" : "PLAYER 2"}: ${redScore}`;
+
+  const mine = state.players.find(p => p.id === socket.id);
 
   if (mine) {
     const cooldown = Math.ceil((mine.abilityCooldownMs || 0) / 1000);
