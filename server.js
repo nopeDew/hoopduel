@@ -90,12 +90,14 @@ function cleanName(value) {
     .slice(0, 14) || "Player";
 }
 
-function createPlayer(socket, name, side) {
+function createPlayer(socket, name, side, seat = 1) {
   return {
     id: socket.id,
     name: cleanName(name),
     side,
+    seat,
     characterId: side === 1 ? "lebron" : "steph",
+
     x: side === 1 ? 510 : 690,
     y: COURT.floor,
     vx: 0,
@@ -130,7 +132,15 @@ function createBall() {
     dunking: false,
     dunkTimer: 0,
     dunkScorerSide: null,
+    dunkScorerId: null,
     shotBySide: null,
+    shotByPlayerId: null,
+    isPass: false,
+    passTargetId: null,
+    passStartedAt: 0,
+    passDurationMs: 0,
+    passStartX: 600,
+    passStartY: 330,
     shotPoints: 2,
     pendingScore: null,
     previousX: 600,
@@ -177,11 +187,15 @@ function firstAvailableCharacter(room) {
 function publicRoom(room, mySide = null) {
   return {
     code: room.code,
+    mode: room.mode,
+    capacity: room.capacity,
     players: room.players.map(p => {
       const character = characterFor(p);
       return {
+        id: p.id,
         name: p.name,
         side: p.side,
+        seat: p.seat,
         score: p.score,
         ready: p.ready,
         characterId: p.characterId,
@@ -199,12 +213,29 @@ function publicRoom(room, mySide = null) {
   };
 }
 
-// Per-player packets keep the exact shot meter private to the shooter.
+function teamScore(room, side) {
+  return room.players
+    .filter(player => player.side === side)
+    .reduce((total, player) => total + player.score, 0);
+}
+
+function teamPlayers(room, side) {
+  return room.players.filter(player => player.side === side);
+}
+
+function normalizeTeamSeats(room) {
+  for (const side of [1, 2]) {
+    teamPlayers(room, side).forEach((player, index) => {
+      player.seat = index + 1;
+    });
+  }
+}
+
+// Each player's packet keeps the exact shot meter private to that player.
 function emitState(room, now = Date.now()) {
   const clock = getClock(room, now);
 
-  // Keep the meter at 0% during the tip-off countdown; its 14-second
-  // recharge begins when the ball is tossed into play.
+  // Keep the meter at 0% during the tip-off countdown.
   const abilityClockNow = Math.max(now, room.jumpBallStartsAt || now);
 
   for (const viewer of room.players) {
@@ -218,8 +249,10 @@ function emitState(room, now = Date.now()) {
           : 0;
 
         return {
+          id: p.id,
           name: p.name,
           side: p.side,
+          seat: p.seat,
           characterId: p.characterId,
           characterName: character.name,
           jerseyNumber: character.number,
@@ -252,6 +285,7 @@ function emitState(room, now = Date.now()) {
           ? room.players.find(p => p.id === room.ball.owner)?.side || null
           : null,
         dunking: room.ball.dunking,
+        isPass: room.ball.isPass,
         pendingScore: !!room.ball.pendingScore
       },
       clock,
@@ -272,10 +306,18 @@ function startGame(room) {
   room.lastTick = now;
   room.snapshotCounter = 0;
 
-  room.players.forEach((p, index) => {
+  room.players.forEach(p => {
     p.score = 0;
     p.ready = false;
-    p.x = index === 0 ? 530 : 670;
+
+    if (room.mode === "2v2") {
+      p.x = p.side === 1
+        ? (p.seat === 1 ? 465 : 545)
+        : (p.seat === 1 ? 735 : 655);
+    } else {
+      p.x = p.side === 1 ? 530 : 670;
+    }
+
     p.y = COURT.floor;
     p.vx = 0;
     p.vy = 0;
@@ -292,12 +334,10 @@ function startGame(room) {
     p.dashDirection = 0;
     p.abilityUntil = 0;
 
-    // Start the recharge when the jump ball begins, not during the lobby
-    // or opening countdown. Neither player starts with a ready ability.
+    // Both teams start with empty ability meters.
     p.abilityCooldownUntil = room.jumpBallStartsAt + ABILITY_COOLDOWN_MS;
   });
 
-  // The ball rises from center court when the countdown ends.
   room.ball = createBall();
   room.ball.x = 600;
   room.ball.y = 350;
@@ -313,7 +353,6 @@ function startGame(room) {
 function followHolder(ball, player) {
   const direction = player.side === 1 ? 1 : -1;
 
-  // Raise the ball during pump fakes and shot charging.
   if (player.action === "pumpFake" || player.shootStartedAt !== null) {
     ball.x = player.x + direction * 15;
     ball.y = player.y - 190;
@@ -432,6 +471,7 @@ function tryPickupBall(room) {
 
   if (
     ball.owner ||
+    ball.isPass ||
     ball.dunking ||
     ball.pendingScore ||
     Date.now() < ball.pickupLockoutUntil
@@ -454,13 +494,10 @@ function tryPickupBall(room) {
 
 function shootBall(room, p, heldMilliseconds) {
   const ball = room.ball;
+
   if (ball.owner !== p.id) return;
 
-  const hoopX = p.side === 1
-    ? COURT.rightHoop
-    : COURT.leftHoop;
-
-  // Aim toward the opponent's hoop, even if the player has crossed center court.
+  const hoopX = p.side === 1 ? COURT.rightHoop : COURT.leftHoop;
   const direction = Math.sign(hoopX - p.x) || (p.side === 1 ? 1 : -1);
   const distance = Math.abs(hoopX - p.x);
   const airborne = p.y < COURT.floor - 24;
@@ -468,7 +505,6 @@ function shootBall(room, p, heldMilliseconds) {
   const dieselActive = p.characterId === "shaq" && p.abilityUntil > Date.now();
   const dunkRange = 125 + (dieselActive ? 85 : 0);
 
-  // A close-range airborne shot becomes a dunk.
   if (distance < dunkRange && airborne) {
     p.dunking = true;
     p.action = "dunk";
@@ -478,7 +514,9 @@ function shootBall(room, p, heldMilliseconds) {
     ball.dunking = true;
     ball.dunkTimer = 0.38;
     ball.dunkScorerSide = p.side;
+    ball.dunkScorerId = p.id;
     ball.shotBySide = p.side;
+    ball.shotByPlayerId = p.id;
     ball.shotPoints = 2;
     ball.x = hoopX - direction * 14;
     ball.y = COURT.hoopY - 38;
@@ -495,11 +533,7 @@ function shootBall(room, p, heldMilliseconds) {
 
   let timingQuality = greenRelease
     ? 1
-    : clamp(
-        1 - Math.abs(charge - PERFECT_RELEASE) / 0.78,
-        0.08,
-        0.92
-      );
+    : clamp(1 - Math.abs(charge - PERFECT_RELEASE) / 0.78, 0.08, 0.92);
 
   if (kareemSkyhookActive) {
     timingQuality = clamp(timingQuality + 0.16, 0.08, 1);
@@ -512,9 +546,9 @@ function shootBall(room, p, heldMilliseconds) {
     1
   );
 
-  const defender = room.players.find(other => other.id !== p.id);
-  const defenderDistance = defender
-    ? Math.hypot(defender.x - p.x, defender.y - p.y)
+  const defenders = room.players.filter(other => other.side !== p.side);
+  const defenderDistance = defenders.length
+    ? Math.min(...defenders.map(defender => Math.hypot(defender.x - p.x, defender.y - p.y)))
     : 999;
 
   const pressure = clamp((165 - defenderDistance) / 165, 0, 1);
@@ -527,26 +561,24 @@ function shootBall(room, p, heldMilliseconds) {
 
   const points = distance >= THREE_POINT_DISTANCE ? 3 : 2;
 
-  // Poorer timing/defense creates a wider left-right miss window.
-  // Keep the target close to the rim vertically so misses do not create wild arcs.
+  // Shot quality affects the horizontal miss window, not the arc itself.
   const missRange = 3 + 82 * (1 - quality);
   const targetX = hoopX + (Math.random() * 2 - 1) * missRange;
   const targetY = COURT.hoopY;
 
-  // Release from in front of the player's body, then calculate one clean
-  // ballistic arc that reaches the target on its way down.
+  // Release near the raised shooting hands, avoiding a sudden ball drop.
   ball.owner = null;
+  ball.isPass = false;
+  ball.passTargetId = null;
   ball.x = p.x + direction * 24;
-  ball.y = p.y - 68;
+  ball.y = p.y - 170;
   ball.previousX = ball.x;
   ball.previousY = ball.y;
 
   const horizontalDistance = targetX - ball.x;
   const travelDistance = Math.abs(horizontalDistance);
 
-  // Longer attempts get a higher arc. The chosen apex guarantees that the
-  // ball crosses the rim height while descending instead of using a forced
-  // vertical-speed cutoff that can distort the trajectory.
+  // Longer attempts get a higher apex, with a predictable ballistic arc.
   const arcHeight = clamp(45 + travelDistance * 0.11, 55, 160);
   const apexY = targetY - arcHeight;
   const rise = Math.max(1, ball.y - apexY);
@@ -560,6 +592,7 @@ function shootBall(room, p, heldMilliseconds) {
   ball.vy = -Math.sqrt(2 * BALL_GRAVITY * rise);
 
   ball.shotBySide = p.side;
+  ball.shotByPlayerId = p.id;
   ball.shotPoints = points;
   ball.pickupLockoutUntil = Date.now() + 420;
 
@@ -581,68 +614,65 @@ function handleBlocks(room) {
     ball.owner ||
     !ball.shotBySide ||
     ball.dunking ||
-    ball.pendingScore
+    ball.pendingScore ||
+    ball.isPass
   ) return;
 
-  const defender = room.players.find(
-    p => p.side !== ball.shotBySide
-  );
+  const defenders = room.players
+    .filter(p => p.side !== ball.shotBySide && p.y < COURT.floor - 18)
+    .sort((a, b) => Math.abs(a.x - ball.x) - Math.abs(b.x - ball.x));
 
-  if (!defender || defender.y >= COURT.floor - 18) return;
+  const defender = defenders.find(p => {
+    const lebronBoost = p.characterId === "lebron" && p.abilityUntil > Date.now();
+    const horizontalReach = lebronBoost ? 52 : 35;
+    const verticalReach = lebronBoost ? 215 : 160;
 
-  const lebronBoost = defender.characterId === "lebron" && defender.abilityUntil > Date.now();
-  const horizontalReach = lebronBoost ? 52 : 35;
-  const verticalReach = lebronBoost ? 215 : 160;
-  const nearBall =
-    Math.abs(ball.x - defender.x) < horizontalReach &&
-    ball.y < defender.y - 25 &&
-    ball.y > defender.y - verticalReach;
+    return Math.abs(ball.x - p.x) < horizontalReach &&
+      ball.y < p.y - 25 &&
+      ball.y > p.y - verticalReach;
+  });
 
-  if (!nearBall) return;
+  if (!defender) return;
 
   const direction = Math.sign(ball.vx) || 1;
-
   ball.vx = -direction * Math.max(170, Math.abs(ball.vx) * 0.5);
   ball.vy = -Math.max(200, Math.abs(ball.vy) * 0.35);
   ball.shotBySide = null;
+  ball.shotByPlayerId = null;
   ball.pickupLockoutUntil = Date.now() + 180;
 
   defender.action = "block";
   defender.actionUntil = Date.now() + 350;
 
-  io.to(room.code).emit("blocked", {
-    player: defender.name
-  });
+  io.to(room.code).emit("blocked", { player: defender.name });
 }
 
 function attemptSteal(room, player, now = Date.now()) {
   const ball = room.ball;
-  const opponent = room.players.find(p => p.id !== player.id);
 
   if (
-    !opponent ||
-    ball.dunking ||
-    ball.pendingScore ||
-    opponent.stunnedUntil > now ||
-    player.stunnedUntil > now ||
-    player.dunking ||
+    ball.dunking || ball.pendingScore || ball.isPass ||
+    player.stunnedUntil > now || player.dunking ||
     player.shootStartedAt !== null
   ) return;
 
   if (now - player.lastStealAt < STEAL_COOLDOWN_MS) return;
 
-  // Spend the attempt even when the defender presses too early or from too far away.
-  player.lastStealAt = now;
+  const horizontalDistanceTo = other => Math.abs(player.x - other.x);
+  const verticalDistanceTo = other => Math.abs(player.y - other.y);
 
-  const horizontalDistance = Math.abs(player.x - opponent.x);
-  const verticalDistance = Math.abs(player.y - opponent.y);
-
-  // When nobody has possession, Shift can briefly stun the nearby opponent.
-  // The ball stays loose; this does not turn into an automatic pickup or steal.
+  // On a loose ball, Shift stuns the nearest opponent briefly.
   if (!ball.owner) {
+    const opponent = room.players
+      .filter(other => other.side !== player.side && other.stunnedUntil <= now)
+      .sort((a, b) => horizontalDistanceTo(a) - horizontalDistanceTo(b))[0];
+
+    if (!opponent) return;
+    player.lastStealAt = now;
+
     if (
-      horizontalDistance > LOOSE_BALL_STUN_RANGE ||
-      verticalDistance > 42
+      horizontalDistanceTo(opponent) > LOOSE_BALL_STUN_RANGE ||
+      verticalDistanceTo(opponent) > 42
     ) return;
 
     opponent.stunnedUntil = now + LOOSE_BALL_STUN_DURATION_MS;
@@ -657,13 +687,22 @@ function attemptSteal(room, player, now = Date.now()) {
     return;
   }
 
-  // A normal steal only works against the opponent who is holding the ball.
+  // A possession steal only works against an opponent holding the ball.
+  const holder = room.players.find(other => other.id === ball.owner);
+
   if (
-    ball.owner !== opponent.id ||
-    opponent.shootStartedAt !== null
+    !holder ||
+    holder.side === player.side ||
+    holder.stunnedUntil > now ||
+    holder.shootStartedAt !== null
   ) return;
 
-  if (horizontalDistance > STEAL_RANGE || verticalDistance > 42) return;
+  player.lastStealAt = now;
+
+  if (
+    horizontalDistanceTo(holder) > STEAL_RANGE ||
+    verticalDistanceTo(holder) > 42
+  ) return;
 
   ball.owner = player.id;
   ball.vx = 0;
@@ -674,8 +713,101 @@ function attemptSteal(room, player, now = Date.now()) {
   io.to(room.code).emit("stolen", { player: player.name });
 }
 
+function passBall(room, player) {
+  if (
+    room.mode !== "2v2" ||
+    room.ball.owner !== player.id ||
+    player.dunking ||
+    player.shootStartedAt !== null
+  ) return false;
+
+  const teammate = room.players
+    .filter(other => other.side === player.side && other.id !== player.id)
+    .sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))[0];
+
+  if (!teammate) return false;
+
+  const now = Date.now();
+  const ball = room.ball;
+
+  ball.owner = null;
+  ball.isPass = true;
+  ball.passTargetId = teammate.id;
+  ball.passStartedAt = now;
+  ball.passStartX = player.x + (player.side === 1 ? 1 : -1) * 28;
+  ball.passStartY = player.y - 68;
+  ball.passDurationMs = clamp(
+    Math.hypot(teammate.x - player.x, teammate.y - player.y) / 650 * 1000,
+    240,
+    650
+  );
+  ball.x = ball.passStartX;
+  ball.y = ball.passStartY;
+  ball.vx = 0;
+  ball.vy = 0;
+  ball.shotBySide = null;
+  ball.shotByPlayerId = null;
+  ball.pickupLockoutUntil = now;
+
+  player.action = "pass";
+  player.actionUntil = now + 250;
+
+  io.to(room.code).emit("passThrown", {
+    player: player.name,
+    teammate: teammate.name
+  });
+
+  return true;
+}
+
+function updatePassBall(room, now = Date.now()) {
+  const ball = room.ball;
+  const receiver = room.players.find(p => p.id === ball.passTargetId);
+
+  if (!receiver) {
+    ball.isPass = false;
+    ball.passTargetId = null;
+    ball.pickupLockoutUntil = now + 100;
+    return;
+  }
+
+  const t = clamp(
+    (now - ball.passStartedAt) / Math.max(1, ball.passDurationMs),
+    0,
+    1
+  );
+
+  const facing = receiver.side === 1 ? 1 : -1;
+  const targetX = receiver.x + facing * 22;
+  const targetY = receiver.y - 72;
+
+  ball.x = lerpServer(ball.passStartX, targetX, t);
+  ball.y = lerpServer(ball.passStartY, targetY, t) - Math.sin(t * Math.PI) * 66;
+
+  if (t >= 1) {
+    ball.isPass = false;
+    ball.passTargetId = null;
+    ball.owner = receiver.id;
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.x = targetX;
+    ball.y = targetY;
+
+    receiver.action = "catch";
+    receiver.actionUntil = now + 220;
+  }
+}
+
+function lerpServer(a, b, t) {
+  return a + (b - a) * t;
+}
+
 function activateAbility(room, player, now = Date.now()) {
-  if (now < room.jumpBallStartsAt || now < player.abilityCooldownUntil || player.stunnedUntil > now) return false;
+  if (
+    now < room.jumpBallStartsAt ||
+    now < player.abilityCooldownUntil ||
+    player.stunnedUntil > now
+  ) return false;
 
   const character = characterFor(player);
   player.abilityUntil = now + 4000;
@@ -693,7 +825,9 @@ function activateAbility(room, player, now = Date.now()) {
 
 function givePossession(room, player) {
   room.players.forEach(p => {
-    p.x = p.side === 1 ? 240 : 960;
+    p.x = p.side === 1
+      ? (p.seat === 1 ? 230 : 300)
+      : (p.seat === 1 ? 970 : 900);
     p.y = COURT.floor;
     p.vx = 0;
     p.vy = 0;
@@ -701,12 +835,13 @@ function givePossession(room, player) {
     p.action = "idle";
     p.shootStartedAt = null;
     p.input.shoot = false;
+    p.input.pass = false;
     p.previousInput.shoot = false;
+    p.previousInput.pass = false;
   });
 
   room.ball = createBall();
   room.ball.owner = player.id;
-
   followHolder(room.ball, player);
 }
 
@@ -715,14 +850,20 @@ function scoreBasket(room, scorer, points) {
 
   scorer.score += points;
 
-  const receiver = room.players.find(p => p.id !== scorer.id);
+  const receiver = room.players
+    .filter(p => p.side !== scorer.side)
+    .sort((a, b) => a.seat - b.seat)[0];
+
   const hoopX = scorer.side === 1
     ? COURT.rightHoop
     : COURT.leftHoop;
 
   room.ball.dunking = false;
   room.ball.owner = null;
+  room.ball.isPass = false;
+  room.ball.passTargetId = null;
   room.ball.shotBySide = null;
+  room.ball.shotByPlayerId = null;
 
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
@@ -741,7 +882,7 @@ function scoreBasket(room, scorer, points) {
   io.to(room.code).emit("basket", {
     scorer: scorer.name,
     points,
-    score: room.players.map(p => p.score)
+    teamScores: [teamScore(room, 1), teamScore(room, 2)]
   });
 }
 
@@ -750,16 +891,14 @@ function checkBasket(room) {
 
   if (
     ball.owner ||
+    ball.isPass ||
     ball.dunking ||
     ball.pendingScore ||
     !ball.shotBySide ||
     ball.vy <= 0
   ) return;
 
-  if (
-    !(ball.previousY <= COURT.hoopY &&
-      ball.y >= COURT.hoopY)
-  ) return;
+  if (!(ball.previousY <= COURT.hoopY && ball.y >= COURT.hoopY)) return;
 
   const differenceY = ball.y - ball.previousY;
   if (differenceY === 0) return;
@@ -770,38 +909,37 @@ function checkBasket(room) {
     1
   );
 
-  const crossingX =
-    ball.previousX + (ball.x - ball.previousX) * fraction;
-
-  let scorer = null;
+  const crossingX = ball.previousX + (ball.x - ball.previousX) * fraction;
+  let scoringSide = null;
 
   if (
     Math.abs(crossingX - COURT.rightHoop) < 24 &&
+    ball.vx > 0 &&
     ball.shotBySide === 1
-  ) {
-    scorer = room.players.find(p => p.side === 1);
-  }
+  ) scoringSide = 1;
 
   if (
     Math.abs(crossingX - COURT.leftHoop) < 24 &&
+    ball.vx < 0 &&
     ball.shotBySide === 2
-  ) {
-    scorer = room.players.find(p => p.side === 2);
-  }
+  ) scoringSide = 2;
 
-  if (scorer) {
-    scoreBasket(room, scorer, ball.shotPoints || 2);
+  if (scoringSide !== null) {
+    const scorer = room.players.find(p => p.id === ball.shotByPlayerId) ||
+      room.players.find(p => p.side === scoringSide);
+
+    if (scorer) {
+      scoreBasket(room, scorer, ball.shotPoints || 2);
+    }
   }
 }
 
 function handleDunk(room, dt) {
   room.ball.dunkTimer -= dt;
-
   if (room.ball.dunkTimer > 0) return;
 
-  const scorer = room.players.find(
-    p => p.side === room.ball.dunkScorerSide
-  );
+  const scorer = room.players.find(p => p.id === room.ball.dunkScorerId) ||
+    room.players.find(p => p.side === room.ball.dunkScorerSide);
 
   room.ball.dunking = false;
 
@@ -817,12 +955,9 @@ function finishGame(room) {
   room.gameOver = true;
   room.started = false;
 
-  const [p1, p2] = room.players;
-  const winner = p1.score === p2.score
-    ? null
-    : p1.score > p2.score
-      ? p1.name
-      : p2.name;
+  const blueScore = teamScore(room, 1);
+  const redScore = teamScore(room, 2);
+  const winnerSide = blueScore === redScore ? null : blueScore > redScore ? 1 : 2;
 
   room.players.forEach(p => {
     p.ready = false;
@@ -831,9 +966,12 @@ function finishGame(room) {
   });
 
   io.to(room.code).emit("gameOver", {
-    winner,
+    winner: winnerSide === null ? null : winnerSide === 1 ? "TEAM BLUE" : "TEAM RED",
+    winnerSide,
+    teamScores: [blueScore, redScore],
     scores: room.players.map(p => ({
       name: p.name,
+      side: p.side,
       score: p.score
     }))
   });
@@ -844,9 +982,7 @@ function finishGame(room) {
 function updateGameClock(room, now) {
   if (now < room.periodEndsAt) return;
 
-  const [p1, p2] = room.players;
-
-  if (p1.score !== p2.score) {
+  if (teamScore(room, 1) !== teamScore(room, 2)) {
     finishGame(room);
     return;
   }
@@ -861,16 +997,21 @@ function updateGameClock(room, now) {
 }
 
 io.on("connection", socket => {
-  socket.on("createRoom", ({ name } = {}) => {
+  socket.on("createRoom", ({ name, mode } = {}) => {
     let code;
 
     do {
       code = makeCode();
     } while (rooms.has(code));
 
+    const selectedMode = mode === "2v2" ? "2v2" : "1v1";
+    const capacity = selectedMode === "2v2" ? 4 : 2;
+
     const room = {
       code,
-      players: [createPlayer(socket, name, 1)],
+      mode: selectedMode,
+      capacity,
+      players: [createPlayer(socket, name, 1, 1)],
       ball: createBall(),
       started: false,
       gameOver: false,
@@ -890,21 +1031,26 @@ io.on("connection", socket => {
 
   socket.on("joinRoom", ({ code, name } = {}) => {
     code = String(code || "").trim().toUpperCase();
-
     const room = rooms.get(code);
 
     if (!room) {
-      return socket.emit(
-        "joinError",
-        "Room not found. Check the code."
-      );
+      return socket.emit("joinError", "Room not found. Check the code.");
     }
 
-    if (room.players.length >= 2) {
+    if (room.started) {
+      return socket.emit("joinError", "That game has already started.");
+    }
+
+    if (room.players.length >= room.capacity) {
       return socket.emit("joinError", "That room is full.");
     }
 
-    const player = createPlayer(socket, name, 2);
+    const playersPerTeam = room.capacity / 2;
+    const blueCount = teamPlayers(room, 1).length;
+    const side = blueCount < playersPerTeam ? 1 : 2;
+    const seat = teamPlayers(room, side).length + 1;
+
+    const player = createPlayer(socket, name, side, seat);
     player.characterId = firstAvailableCharacter(room);
     room.players.push(player);
 
@@ -912,7 +1058,7 @@ io.on("connection", socket => {
     socket.data.room = code;
 
     io.to(code).emit("roomUpdate", publicRoom(room));
-    socket.emit("roomJoined", publicRoom(room, 2));
+    socket.emit("roomJoined", publicRoom(room, side));
   });
 
   socket.on("selectCharacter", ({ characterId } = {}) => {
@@ -922,11 +1068,11 @@ io.on("connection", socket => {
     const player = room.players.find(p => p.id === socket.id);
     if (!player || player.ready || !CHARACTERS[characterId]) return;
 
-    const takenByOpponent = room.players.some(
+    const alreadyTaken = room.players.some(
       other => other.id !== player.id && other.characterId === characterId
     );
 
-    if (takenByOpponent) {
+    if (alreadyTaken) {
       socket.emit("characterSelectError", "That legend is already picked. Choose another.");
       return;
     }
@@ -946,7 +1092,7 @@ io.on("connection", socket => {
     player.ready = true;
 
     if (
-      room.players.length === 2 &&
+      room.players.length === room.capacity &&
       room.players.every(p => p.ready)
     ) {
       startGame(room);
@@ -996,11 +1142,16 @@ io.on("connection", socket => {
       shoot: countdown ? false : !!input.shoot,
       steal: countdown ? false : !!input.steal,
       pumpFake: countdown ? false : !!input.pumpFake,
+      pass: countdown ? false : !!input.pass,
       ability: countdown ? false : !!input.ability
     };
 
     if (next.steal && !p.input.steal) {
       attemptSteal(room, p, now);
+    }
+
+    if (next.pass && !p.input.pass) {
+      passBall(room, p);
     }
 
     if (next.ability && !p.input.ability) {
@@ -1037,7 +1188,11 @@ io.on("connection", socket => {
         p.shootStartedAt !== null &&
         room.ball.owner === p.id
       ) {
-        shootBall(room, p, Date.now() - p.shootStartedAt);
+        shootBall(
+          room,
+          p,
+          Date.now() - p.shootStartedAt
+        );
       }
 
       p.shootStartedAt = null;
@@ -1051,13 +1206,18 @@ io.on("connection", socket => {
     if (!room) return;
 
     room.players = room.players.filter(p => p.id !== socket.id);
+    normalizeTeamSeats(room);
 
     if (!room.players.length) {
       rooms.delete(room.code);
     } else {
       room.started = false;
       room.gameOver = false;
-      room.players[0].ready = false;
+      room.players.forEach(p => {
+        p.ready = false;
+        p.input = {};
+        p.previousInput = {};
+      });
       room.ball = createBall();
 
       io.to(room.code).emit("opponentLeft");
@@ -1066,12 +1226,12 @@ io.on("connection", socket => {
   });
 });
 
-// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS.
+// Physics runs at 60 FPS. Snapshots are sent at 30 FPS for smoother networking.
 setInterval(() => {
   const now = Date.now();
 
   for (const room of rooms.values()) {
-    if (!room.started || room.players.length !== 2) continue;
+    if (!room.started || room.players.length !== room.capacity) continue;
 
     if (now < room.jumpBallStartsAt) {
       room.snapshotCounter += 1;
@@ -1119,9 +1279,13 @@ setInterval(() => {
       }
     } else if (room.ball.dunking) {
       handleDunk(room, dt);
+    } else if (room.ball.isPass) {
+      updatePassBall(room, now);
     } else {
       if (room.ball.owner) {
-        const holder = room.players.find(p => p.id === room.ball.owner);
+        const holder = room.players.find(
+          p => p.id === room.ball.owner
+        );
 
         if (holder) {
           followHolder(room.ball, holder);
