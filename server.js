@@ -30,19 +30,17 @@ const JUMP_POWER = 665;
 const GRAVITY = 1250;
 const BALL_GRAVITY = 820;
 
-// Jump-ball opening.
 const JUMP_BALL_TOSS_SPEED = 480;
 
-// Dash.
 const DASH_SPEED = 850;
 const DASH_DURATION_MS = 180;
 const DASH_COOLDOWN_MS = 1100;
 
-// Deliberate steals: very close range, with a real cooldown.
 const STEAL_RANGE = 38;
+const LOOSE_BALL_STUN_RANGE = 52;
+const LOOSE_BALL_STUN_DURATION_MS = 700;
 const STEAL_COOLDOWN_MS = 1300;
 
-// The shot meter reaches its green band faster than before.
 const SHOT_CHARGE_RATE = 1.5;
 const ABILITY_COOLDOWN_MS = 14000;
 
@@ -98,7 +96,6 @@ function createPlayer(socket, name, side) {
     name: cleanName(name),
     side,
     characterId: side === 1 ? "lebron" : "steph",
-
     x: side === 1 ? 510 : 690,
     y: COURT.floor,
     vx: 0,
@@ -202,9 +199,12 @@ function publicRoom(room, mySide = null) {
   };
 }
 
-// Per-player packets keep the exact shot meter private to the shooter.
 function emitState(room, now = Date.now()) {
   const clock = getClock(room, now);
+
+  // Keep the meter at 0% during the tip-off countdown.
+  // Its 14-second recharge begins when the ball is tossed into play.
+  const abilityClockNow = Math.max(now, room.jumpBallStartsAt || now);
 
   for (const viewer of room.players) {
     io.to(viewer.id).emit("state", {
@@ -226,9 +226,9 @@ function emitState(room, now = Date.now()) {
           abilityIcon: character.icon,
           abilityActive: p.abilityUntil > now,
           abilityRemainingMs: Math.max(0, p.abilityUntil - now),
-          abilityCooldownMs: Math.max(0, p.abilityCooldownUntil - now),
+          abilityCooldownMs: Math.max(0, p.abilityCooldownUntil - abilityClockNow),
           abilityFill: clamp(
-            1 - Math.max(0, p.abilityCooldownUntil - now) / ABILITY_COOLDOWN_MS,
+            1 - Math.max(0, p.abilityCooldownUntil - abilityClockNow) / ABILITY_COOLDOWN_MS,
             0,
             1
           ),
@@ -290,10 +290,12 @@ function startGame(room) {
     p.dashUntil = 0;
     p.dashDirection = 0;
     p.abilityUntil = 0;
-    p.abilityCooldownUntil = 0;
+
+    // Neither player starts with a ready ability.
+    // The cooldown starts when the jump ball begins.
+    p.abilityCooldownUntil = room.jumpBallStartsAt + ABILITY_COOLDOWN_MS;
   });
 
-  // The ball rises from center court when the countdown ends.
   room.ball = createBall();
   room.ball.x = 600;
   room.ball.y = 350;
@@ -309,7 +311,6 @@ function startGame(room) {
 function followHolder(ball, player) {
   const direction = player.side === 1 ? 1 : -1;
 
-  // Raise the ball during pump fakes and shot charging.
   if (player.action === "pumpFake" || player.shootStartedAt !== null) {
     ball.x = player.x + direction * 15;
     ball.y = player.y - 190;
@@ -463,7 +464,6 @@ function shootBall(room, p, heldMilliseconds) {
   const dieselActive = p.characterId === "shaq" && p.abilityUntil > Date.now();
   const dunkRange = 125 + (dieselActive ? 85 : 0);
 
-  // A close-range airborne shot becomes a dunk.
   if (distance < dunkRange && airborne) {
     p.dunking = true;
     p.action = "dunk";
@@ -495,7 +495,10 @@ function shootBall(room, p, heldMilliseconds) {
         0.08,
         0.92
       );
-  if (kareemSkyhookActive) timingQuality = clamp(timingQuality + 0.16, 0.08, 1);
+
+  if (kareemSkyhookActive) {
+    timingQuality = clamp(timingQuality + 0.16, 0.08, 1);
+  }
 
   const effectiveDistance = stephRangeActive ? distance * 0.72 : distance;
   const distanceQuality = clamp(
@@ -610,15 +613,11 @@ function attemptSteal(room, player, now = Date.now()) {
   const ball = room.ball;
   const opponent = room.players.find(p => p.id !== player.id);
 
-  // Shift only steals possession from the opponent who is actually holding it.
-  // It never stuns someone when the ball is loose or when you already own it.
   if (
     !opponent ||
-    ball.owner !== opponent.id ||
     ball.dunking ||
     ball.pendingScore ||
     opponent.stunnedUntil > now ||
-    opponent.shootStartedAt !== null ||
     player.stunnedUntil > now ||
     player.dunking ||
     player.shootStartedAt !== null
@@ -626,11 +625,37 @@ function attemptSteal(room, player, now = Date.now()) {
 
   if (now - player.lastStealAt < STEAL_COOLDOWN_MS) return;
 
-  // Spend the attempt even when the defender presses too early or from too far away.
   player.lastStealAt = now;
 
   const horizontalDistance = Math.abs(player.x - opponent.x);
   const verticalDistance = Math.abs(player.y - opponent.y);
+
+  // With a loose ball, Shift briefly stuns a nearby opponent.
+  // It does not automatically steal or pick up the ball.
+  if (!ball.owner) {
+    if (
+      horizontalDistance > LOOSE_BALL_STUN_RANGE ||
+      verticalDistance > 42
+    ) return;
+
+    opponent.stunnedUntil = now + LOOSE_BALL_STUN_DURATION_MS;
+    opponent.vx = 0;
+    opponent.action = "stunned";
+    opponent.actionUntil = opponent.stunnedUntil;
+
+    io.to(room.code).emit("stunned", {
+      player: opponent.name,
+      attacker: player.name
+    });
+    return;
+  }
+
+  // Normal steals only work against the opponent holding the ball.
+  if (
+    ball.owner !== opponent.id ||
+    opponent.shootStartedAt !== null
+  ) return;
+
   if (horizontalDistance > STEAL_RANGE || verticalDistance > 42) return;
 
   ball.owner = player.id;
@@ -643,7 +668,11 @@ function attemptSteal(room, player, now = Date.now()) {
 }
 
 function activateAbility(room, player, now = Date.now()) {
-  if (now < room.jumpBallStartsAt || now < player.abilityCooldownUntil || player.stunnedUntil > now) return false;
+  if (
+    now < room.jumpBallStartsAt ||
+    now < player.abilityCooldownUntil ||
+    player.stunnedUntil > now
+  ) return false;
 
   const character = characterFor(player);
   player.abilityUntil = now + 4000;
@@ -655,6 +684,7 @@ function activateAbility(room, player, now = Date.now()) {
     ability: character.ability,
     side: player.side
   });
+
   return true;
 }
 
@@ -691,8 +721,6 @@ function scoreBasket(room, scorer, points) {
   room.ball.owner = null;
   room.ball.shotBySide = null;
 
-  // Put the ball just above the rim, then let it visibly fall
-  // through the extended net before possession changes.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
@@ -822,7 +850,6 @@ function updateGameClock(room, now) {
     return;
   }
 
-  // Tied games receive another full 15-second overtime.
   room.overtime += 1;
   room.periodEndsAt = now + OVERTIME_MS;
 
@@ -866,10 +893,7 @@ io.on("connection", socket => {
     const room = rooms.get(code);
 
     if (!room) {
-      return socket.emit(
-        "joinError",
-        "Room not found. Check the code."
-      );
+      return socket.emit("joinError", "Room not found. Check the code.");
     }
 
     if (room.players.length >= 2) {
@@ -897,6 +921,7 @@ io.on("connection", socket => {
     const takenByOpponent = room.players.some(
       other => other.id !== player.id && other.characterId === characterId
     );
+
     if (takenByOpponent) {
       socket.emit("characterSelectError", "That legend is already picked. Choose another.");
       return;
@@ -932,10 +957,17 @@ io.on("connection", socket => {
 
     const player = room.players.find(p => p.id === socket.id);
     if (!player) return;
+
     const direction = Number(data?.direction);
     const now = Date.now();
+
     if (direction !== -1 && direction !== 1) return;
-    if (player.stunnedUntil > now || player.dunking || now - player.lastDashAt < DASH_COOLDOWN_MS) return;
+
+    if (
+      player.stunnedUntil > now ||
+      player.dunking ||
+      now - player.lastDashAt < DASH_COOLDOWN_MS
+    ) return;
 
     player.lastDashAt = now;
     player.dashDirection = direction;
@@ -947,14 +979,12 @@ io.on("connection", socket => {
     const room = rooms.get(socket.data.room);
     if (!room || !room.started) return;
 
-    const p = room.players.find(
-      player => player.id === socket.id
-    );
-
+    const p = room.players.find(player => player.id === socket.id);
     if (!p) return;
 
     const now = Date.now();
     const countdown = !room.jumpBallTossStarted && now < room.jumpBallStartsAt;
+
     const next = {
       left: !!input.left,
       right: !!input.right,
@@ -965,13 +995,10 @@ io.on("connection", socket => {
       ability: countdown ? false : !!input.ability
     };
 
-    // Handle a steal immediately on the new Shift press. This avoids
-    // polling the steal action inside the 60 FPS physics loop.
     if (next.steal && !p.input.steal) {
       attemptSteal(room, p, now);
     }
 
-    // Character ability activates on E key-down.
     if (next.ability && !p.input.ability) {
       activateAbility(room, p, now);
     }
@@ -981,8 +1008,6 @@ io.on("connection", socket => {
       return;
     }
 
-    // Pump fake only works while holding the ball and not charging a shot.
-    // The edge check means holding the key does not repeatedly trigger it.
     if (
       next.pumpFake &&
       !p.input.pumpFake &&
@@ -993,7 +1018,6 @@ io.on("connection", socket => {
       p.lastPumpFakeAt = now;
       p.action = "pumpFake";
       p.actionUntil = now + 500;
-
     }
 
     if (
@@ -1009,11 +1033,7 @@ io.on("connection", socket => {
         p.shootStartedAt !== null &&
         room.ball.owner === p.id
       ) {
-        shootBall(
-          room,
-          p,
-          Date.now() - p.shootStartedAt
-        );
+        shootBall(room, p, Date.now() - p.shootStartedAt);
       }
 
       p.shootStartedAt = null;
@@ -1026,9 +1046,7 @@ io.on("connection", socket => {
     const room = rooms.get(socket.data.room);
     if (!room) return;
 
-    room.players = room.players.filter(
-      p => p.id !== socket.id
-    );
+    room.players = room.players.filter(p => p.id !== socket.id);
 
     if (!room.players.length) {
       rooms.delete(room.code);
@@ -1039,29 +1057,25 @@ io.on("connection", socket => {
       room.ball = createBall();
 
       io.to(room.code).emit("opponentLeft");
-      io.to(room.code).emit(
-        "roomUpdate",
-        publicRoom(room)
-      );
+      io.to(room.code).emit("roomUpdate", publicRoom(room));
     }
   });
 });
 
-// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS
-// to reduce traffic while client-side interpolation stays smooth.
 setInterval(() => {
   const now = Date.now();
 
   for (const room of rooms.values()) {
     if (!room.started || room.players.length !== 2) continue;
 
-    // Freeze physics during the countdown while preserving queued movement inputs.
     if (now < room.jumpBallStartsAt) {
       room.snapshotCounter += 1;
+
       if (room.snapshotCounter >= SNAPSHOT_EVERY) {
         room.snapshotCounter = 0;
         emitState(room, now);
       }
+
       continue;
     }
 
@@ -1102,9 +1116,7 @@ setInterval(() => {
       handleDunk(room, dt);
     } else {
       if (room.ball.owner) {
-        const holder = room.players.find(
-          p => p.id === room.ball.owner
-        );
+        const holder = room.players.find(p => p.id === room.ball.owner);
 
         if (holder) {
           followHolder(room.ball, holder);
@@ -1130,9 +1142,7 @@ setInterval(() => {
         p.stunnedUntil <= now &&
         !p.dunking
       ) {
-        p.action = p.y < COURT.floor
-          ? "jump"
-          : "idle";
+        p.action = p.y < COURT.floor ? "jump" : "idle";
       }
 
       p.previousInput = { ...p.input };
