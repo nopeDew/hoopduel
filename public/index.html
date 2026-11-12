@@ -196,17 +196,9 @@ h1 {
 }
 
 @media (max-width: 780px) {
-  #characterGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .character-name {
-    min-height: 0;
-  }
-
-  .character-role {
-    min-height: 0;
-  }
+  #characterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .character-name { min-height: 0; }
+  .character-role { min-height: 0; }
 }
 
 input,
@@ -347,7 +339,6 @@ canvas {
   margin-top: 12px;
 }
 
-/* Fullscreen uses a dark canvas surround and hides the instructions. */
 #game:fullscreen {
   width: 100vw;
   height: 100vh;
@@ -512,107 +503,24 @@ let messageUntil = 0;
 let currentRoom = null;
 
 const CHARACTER_INFO = [
-  {
-    id: "lebron",
-    name: "LeBron James",
-    number: "23",
-    role: "The all-around force",
-    ability: "Chase Down",
-    desc: "Extend your block reach for 4 seconds."
-  },
-  {
-    id: "steph",
-    name: "Stephen Curry",
-    number: "30",
-    role: "The deep-range sniper",
-    ability: "Range Extender",
-    desc: "Makes long shots much more accurate for 4 seconds."
-  },
-  {
-    id: "jordan",
-    name: "Michael Jordan",
-    number: "23",
-    role: "The explosive scorer",
-    ability: "First Step",
-    desc: "Gain a major speed boost for 4 seconds."
-  },
-  {
-    id: "shaq",
-    name: "Shaquille O'Neal",
-    number: "34",
-    role: "The dominant big man",
-    ability: "Diesel Mode",
-    desc: "Greatly increases your airborne dunk range for 4 seconds."
-  },
-  {
-    id: "kareem",
-    name: "Kareem Abdul-Jabbar",
-    number: "33",
-    role: "The unstoppable post scorer",
-    ability: "Skyhook",
-    desc: "Improves shot accuracy and reduces defensive pressure for 4 seconds."
-  }
+  { id:"lebron", name:"LeBron James", number:"23", role:"The all-around force", ability:"Chase Down", desc:"Extend your block reach for 4 seconds." },
+  { id:"steph", name:"Stephen Curry", number:"30", role:"The deep-range sniper", ability:"Range Extender", desc:"Makes long shots much more accurate for 4 seconds." },
+  { id:"jordan", name:"Michael Jordan", number:"23", role:"The explosive scorer", ability:"First Step", desc:"Gain a major speed boost for 4 seconds." },
+  { id:"shaq", name:"Shaquille O'Neal", number:"34", role:"The dominant big man", ability:"Diesel Mode", desc:"Greatly increases your airborne dunk range for 4 seconds." },
+  { id:"kareem", name:"Kareem Abdul-Jabbar", number:"33", role:"The unstoppable post scorer", ability:"Skyhook", desc:"Improves shot accuracy and reduces defensive pressure for 4 seconds." }
 ];
 
 const AVATAR_LOOKS = {
-  lebron: {
-    skin: "#986344",
-    hair: "receding",
-    beard: "full",
-    headband: true,
-    scaleX: 1.02,
-    scaleY: 1.02,
-    shoulder: 1.03,
-    head: 1.0
-  },
-  steph: {
-    skin: "#c58b65",
-    hair: "curls",
-    beard: "goatee",
-    headband: false,
-    scaleX: .98,
-    scaleY: .99,
-    shoulder: .96,
-    head: .98
-  },
-  jordan: {
-    skin: "#89553b",
-    hair: "bald",
-    beard: "none",
-    headband: false,
-    scaleX: 1.00,
-    scaleY: 1.01,
-    shoulder: 1.02,
-    head: 1.0
-  },
-  shaq: {
-    skin: "#75452f",
-    hair: "bald",
-    beard: "goatee",
-    headband: false,
-    scaleX: 1.20,
-    scaleY: 1.01,
-    shoulder: 1.22,
-    head: 1.06
-  },
-  kareem: {
-    skin: "#936347",
-    hair: "afro",
-    beard: "mustache",
-    headband: false,
-    scaleX: .98,
-    scaleY: 1.07,
-    shoulder: .98,
-    head: 1.02
-  }
+  lebron: { skin:"#986344", hair:"receding", beard:"full", headband:true, scaleX:1.02, scaleY:1.02, shoulder:1.03, head:1.0 },
+  steph: { skin:"#c58b65", hair:"curls", beard:"goatee", headband:false, scaleX:.98, scaleY:.99, shoulder:.96, head:.98 },
+  jordan: { skin:"#89553b", hair:"bald", beard:"none", headband:false, scaleX:1.00, scaleY:1.01, shoulder:1.02, head:1.0 },
+  shaq: { skin:"#75452f", hair:"bald", beard:"goatee", headband:false, scaleX:1.20, scaleY:1.01, shoulder:1.22, head:1.06 },
+  kareem: { skin:"#936347", hair:"afro", beard:"mustache", headband:false, scaleX:.98, scaleY:1.07, shoulder:.98, head:1.02 }
 };
 
 const keys = {};
 const DOUBLE_TAP_WINDOW = 260;
-const lastDirectionTap = {
-  left: 0,
-  right: 0
-};
+const lastDirectionTap = { left:0, right:0 };
 
 $("create").onclick = () => {
   socket.emit("createRoom", {
@@ -850,7 +758,6 @@ socket.on("state", state => {
 function handleDashTap(key) {
   if (!started) return;
 
-  // Both players use the same local control layout.
   let direction = null;
 
   if (key === "a") direction = -1;
@@ -873,9 +780,7 @@ function handleDashTap(key) {
 }
 
 window.addEventListener("keydown", e => {
-  if (
-    ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)
-  ) {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) {
     e.preventDefault();
   }
 
@@ -908,7 +813,6 @@ window.addEventListener("blur", () => {
 function sendInput() {
   if (!started) return;
 
-  // Both players use the same key layout on their own device.
   socket.emit("input", {
     left: !!keys.a,
     right: !!keys.d,
@@ -951,7 +855,6 @@ function drawArena(ctx, time) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1200, 470);
 
-  // Dark rafters.
   const roof = ctx.createLinearGradient(0, 0, 0, 100);
   roof.addColorStop(0, "#050a12");
   roof.addColorStop(1, "#1b2a3c");
@@ -968,7 +871,6 @@ function drawArena(ctx, time) {
     ctx.stroke();
   }
 
-  // Stylized crowd seating.
   const crowdColors = [
     "#d45c53", "#e1b66c", "#577eac",
     "#d9dce2", "#438d78", "#8b6db2"
@@ -995,7 +897,6 @@ function drawArena(ctx, time) {
     }
   }
 
-  // LED ribbon board.
   const ribbon = ctx.createLinearGradient(0, 0, 1200, 0);
   ribbon.addColorStop(0, "#142c44");
   ribbon.addColorStop(.5, "#244d67");
@@ -1013,7 +914,6 @@ function drawArena(ctx, time) {
   ctx.textAlign = "center";
   ctx.fillText("HOOP DUEL  •  HOME COURT  •  HOOP DUEL", 600, 283);
 
-  // Arena panels.
   for (const x of [60, 280, 500, 720, 940, 1160]) {
     const board = ctx.createLinearGradient(x - 50, 0, x + 50, 0);
     board.addColorStop(0, "#14334c");
@@ -1032,7 +932,6 @@ function drawArena(ctx, time) {
     ctx.fillText("HD", x, 329);
   }
 
-  // Spotlights.
   for (const x of [120, 360, 600, 840, 1080]) {
     const beam = ctx.createRadialGradient(x, 65, 3, x, 220, 190);
     beam.addColorStop(0, "#fff3cf4b");
@@ -1063,7 +962,6 @@ function drawFloor(ctx) {
   ctx.fillStyle = wood;
   ctx.fillRect(0, floorTop, 1200, floorHeight);
 
-  // Hardwood planks.
   for (let y = floorTop + 5; y < floorBottom; y += 23) {
     const row = Math.floor((y - floorTop) / 23);
 
@@ -1088,23 +986,19 @@ function drawFloor(ctx) {
   ctx.fillStyle = shine;
   ctx.fillRect(0, floorTop, 1200, floorHeight);
 
-  // Full hardwood court boundary.
   ctx.strokeStyle = "#fff0d5";
   ctx.lineWidth = 3;
   ctx.strokeRect(1.5, floorTop + 1.5, 1197, floorHeight - 3);
 
-  // Full-height center line.
   ctx.beginPath();
   ctx.moveTo(600, floorTop);
   ctx.lineTo(600, floorBottom);
   ctx.stroke();
 
-  // Center circle.
   ctx.beginPath();
   ctx.ellipse(600, centerY, 83, 91, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Painted keys fill the full hardwood height.
   const key = ctx.createLinearGradient(0, floorTop, 0, floorBottom);
   key.addColorStop(0, "#a54c39");
   key.addColorStop(1, "#8d3d32");
@@ -1113,13 +1007,11 @@ function drawFloor(ctx) {
   ctx.fillRect(0, floorTop, 205, floorHeight);
   ctx.fillRect(995, floorTop, 205, floorHeight);
 
-  // Key boundaries.
   ctx.strokeStyle = "#fff0d5";
   ctx.lineWidth = 3;
   ctx.strokeRect(0, floorTop, 205, floorHeight);
   ctx.strokeRect(995, floorTop, 205, floorHeight);
 
-  // Free-throw arcs enlarged to the full court height.
   ctx.beginPath();
   ctx.ellipse(
     205, centerY, 67, 91,
@@ -1134,7 +1026,6 @@ function drawFloor(ctx) {
   );
   ctx.stroke();
 
-  // Original oversized three-point arcs.
   ctx.beginPath();
   ctx.ellipse(
     90, centerY, 335, 220,
@@ -1149,7 +1040,6 @@ function drawFloor(ctx) {
   );
   ctx.stroke();
 
-  // Center-court branding.
   ctx.save();
   ctx.globalAlpha = .17;
   ctx.fillStyle = "#fff";
@@ -1171,7 +1061,6 @@ function drawHoop(ctx, x, direction) {
   ctx.fillRect(x - 9, 130, 18, 340);
   rounded(ctx, x - 31, 457, 62, 13, 5, "#252e39");
 
-  // Backboard support.
   ctx.strokeStyle = "#293745";
   ctx.lineWidth = 12;
   ctx.beginPath();
@@ -1179,7 +1068,6 @@ function drawHoop(ctx, x, direction) {
   ctx.lineTo(x, 183);
   ctx.stroke();
 
-  // Backboard.
   const glass = ctx.createLinearGradient(x - 6, 0, x + 7, 0);
   glass.addColorStop(0, "#dcecf2");
   glass.addColorStop(.5, "#ffffff");
@@ -1197,7 +1085,6 @@ function drawHoop(ctx, x, direction) {
 
   const rimX = x + direction * 34;
 
-  // Wider rim.
   ctx.save();
   ctx.shadowColor = "#ff6a35";
   ctx.shadowBlur = 13;
@@ -1208,7 +1095,6 @@ function drawHoop(ctx, x, direction) {
   ctx.stroke();
   ctx.restore();
 
-  // Wider net.
   ctx.strokeStyle = "#f4eee4";
   ctx.lineWidth = 1.7;
 
@@ -1232,12 +1118,125 @@ function drawHoop(ctx, x, direction) {
   ctx.restore();
 }
 
+function abilityIconFor(p) {
+  const icons = {
+    lebron: "🛡️",
+    steph: "🎯",
+    jordan: "⚡",
+    shaq: "💪",
+    kareem: "🏀"
+  };
+
+  return icons[p.characterId] || "★";
+}
+
+function abilityColorFor(p) {
+  const colors = {
+    lebron: "#f0c46d",
+    steph: "#72b9ff",
+    jordan: "#f5df69",
+    shaq: "#d69b72",
+    kareem: "#9be0bb"
+  };
+
+  return colors[p.characterId] || "#ffc36e";
+}
+
+// Both players see both ability cooldown meters.
+// The circular fill grows clockwise and becomes fully colored when ready.
+function drawAbilityIndicators(ctx, players) {
+  for (const p of players) {
+    const cx = p.side === 1 ? 82 : 1118;
+    const cy = 58;
+    const radius = 35;
+
+    const progress = clamp(
+      p.abilityFill ?? (p.abilityCooldownMs <= 0 ? 1 : 0),
+      0,
+      1
+    );
+
+    const color = abilityColorFor(p);
+    const ready = progress >= 0.999;
+    const icon = abilityIconFor(p);
+
+    ctx.save();
+
+    ctx.fillStyle = "#091321eF";
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#344254";
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (progress > 0) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(
+        cx,
+        cy,
+        radius,
+        -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * progress
+      );
+      ctx.closePath();
+
+      ctx.fillStyle = color;
+      ctx.globalAlpha = ready ? 1 : .88;
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = ready ? color : "#a9b6c6";
+    ctx.lineWidth = ready ? 3.5 : 2;
+    ctx.shadowColor = ready ? color : "transparent";
+    ctx.shadowBlur = ready ? 12 : 0;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "bold 31px Arial";
+    ctx.fillStyle = ready ? "#102033" : "#ffffff";
+    ctx.shadowColor = "#000";
+    ctx.shadowBlur = 4;
+    ctx.fillText(icon, cx, cy + 1);
+
+    const cooldownSeconds = Math.ceil(
+      (p.abilityCooldownMs || 0) / 1000
+    );
+
+    ctx.shadowBlur = 4;
+    ctx.font = "900 10px Arial";
+    ctx.fillStyle = ready ? "#baffd0" : "#ffffff";
+    ctx.fillText(
+      ready ? "READY" : `${cooldownSeconds}s`,
+      cx,
+      cy + radius + 17
+    );
+
+    ctx.font = "900 10px Arial";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(
+      p.characterName || `PLAYER ${p.side}`,
+      cx,
+      cy + radius + 29
+    );
+
+    ctx.restore();
+  }
+}
+
 function drawLimb(ctx, points, width, color, outline = "#17121b") {
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  // Thick ink-like outline.
   ctx.strokeStyle = outline;
   ctx.lineWidth = width + 5;
   ctx.beginPath();
@@ -1246,9 +1245,9 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   for (let i = 1; i < points.length; i++) {
     ctx.lineTo(points[i][0], points[i][1]);
   }
+
   ctx.stroke();
 
-  // Colored limb.
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.beginPath();
@@ -1257,9 +1256,9 @@ function drawLimb(ctx, points, width, color, outline = "#17121b") {
   for (let i = 1; i < points.length; i++) {
     ctx.lineTo(points[i][0], points[i][1]);
   }
+
   ctx.stroke();
 
-  // Rounded joints.
   for (const [x, y] of points) {
     ctx.fillStyle = outline;
     ctx.beginPath();
@@ -1290,7 +1289,6 @@ function drawPlayer(ctx, p, time) {
   const outline = "#17121b";
   const face = blue ? 1 : -1;
 
-  // Each legend has a distinct silhouette as well as a different uniform number.
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(look.scaleX, look.scaleY);
@@ -1306,7 +1304,6 @@ function drawPlayer(ctx, p, time) {
   const headHeight = 40 * look.head;
   const headY = bodyY - 145;
 
-  // Ground shadow.
   ctx.save();
   ctx.globalAlpha = clamp(1 - (470 - y) / 250, .2, .4);
   ctx.fillStyle = "#120e0b";
@@ -1315,7 +1312,6 @@ function drawPlayer(ctx, p, time) {
   ctx.fill();
   ctx.restore();
 
-  // Legs.
   const leftHip = [x - 9, bodyY - 42];
   const rightHip = [x + 9, bodyY - 42];
   const leftKnee = [x - 15 + stride * .5, bodyY - 24];
@@ -1326,7 +1322,6 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, [leftHip, leftKnee, leftFoot], 11, dark, outline);
   drawLimb(ctx, [rightHip, rightKnee, rightFoot], 11, dark, outline);
 
-  // Socks and oversized sneakers.
   rounded(ctx, leftFoot[0] - 5, bodyY - 20, 11, 11, 3, "#f8f5ef");
   rounded(ctx, rightFoot[0] - 5, bodyY - 20, 11, 11, 3, "#f8f5ef");
 
@@ -1339,20 +1334,21 @@ function drawPlayer(ctx, p, time) {
   rounded(ctx, rightFoot[0] - 8, bodyY - 5, 27, 4, 2, main);
   ctx.restore();
 
-  // Arm poses.
   const shooting = p.action === "shoot";
   const pumpFaking = p.action === "pumpFake";
+  const charging = !!p.charging;
   const jumping = p.action === "dunk" || p.action === "block";
 
   let nearArm;
   let farArm;
 
-  if (pumpFaking) {
+  if (pumpFaking || charging) {
     nearArm = [
       [x - face * 22, bodyY - 108],
       [x - face * 27, bodyY - 145],
       [x - face * 15, bodyY - 180]
     ];
+
     farArm = [
       [x + face * 22, bodyY - 108],
       [x + face * 28, bodyY - 143],
@@ -1364,6 +1360,7 @@ function drawPlayer(ctx, p, time) {
       [x - face * 29, bodyY - 138],
       [x - face * 13, bodyY - 163]
     ];
+
     farArm = [
       [x + face * 22, bodyY - 108],
       [x + face * 30, bodyY - 89],
@@ -1375,6 +1372,7 @@ function drawPlayer(ctx, p, time) {
       [x - face * 30, bodyY - 137],
       [x - face * 19, bodyY - 170]
     ];
+
     farArm = [
       [x + face * 22, bodyY - 108],
       [x + face * 28, bodyY - 135],
@@ -1386,6 +1384,7 @@ function drawPlayer(ctx, p, time) {
       [x - face * 29, bodyY - 87 + stride * .25],
       [x - face * 33, bodyY - 74 + stride * .25]
     ];
+
     farArm = [
       [x + face * 22, bodyY - 108],
       [x + face * 29, bodyY - 87 - stride * .25],
@@ -1396,7 +1395,6 @@ function drawPlayer(ctx, p, time) {
   drawLimb(ctx, farArm, 11, skin, outline);
   drawLimb(ctx, nearArm, 12, skin, outline);
 
-  // Shorts.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1414,6 +1412,7 @@ function drawPlayer(ctx, p, time) {
     x - 22, bodyY - 70,
     x + 22, bodyY - 28
   );
+
   shorts.addColorStop(0, light);
   shorts.addColorStop(1, dark);
 
@@ -1434,7 +1433,6 @@ function drawPlayer(ctx, p, time) {
   ctx.stroke();
   ctx.restore();
 
-  // Jersey.
   ctx.save();
   ctx.fillStyle = outline;
   ctx.beginPath();
@@ -1451,6 +1449,7 @@ function drawPlayer(ctx, p, time) {
     x - shoulder, bodyY - 125,
     x + shoulder, bodyY - 65
   );
+
   jersey.addColorStop(0, light);
   jersey.addColorStop(.3, main);
   jersey.addColorStop(1, dark);
@@ -1484,6 +1483,7 @@ function drawPlayer(ctx, p, time) {
   ctx.textAlign = "center";
   ctx.shadowColor = "#0009";
   ctx.shadowBlur = 3;
+
   ctx.fillText(
     p.jerseyNumber ||
     CHARACTER_INFO.find(c => c.id === characterId)?.number ||
@@ -1491,12 +1491,11 @@ function drawPlayer(ctx, p, time) {
     x,
     bodyY - 82
   );
+
   ctx.restore();
 
-  // Neck.
   rounded(ctx, x - 9, bodyY - 135, 18, 20, 5, skin);
 
-  // Ears.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x - face * 34, headY - 2, 10, 15, 0, 0, Math.PI * 2);
@@ -1509,7 +1508,6 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 34, headY - 2, 7, 12, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Head silhouette.
   ctx.fillStyle = outline;
   ctx.beginPath();
   ctx.ellipse(x, headY, headWidth + 3, headHeight + 3, 0, 0, Math.PI * 2);
@@ -1519,6 +1517,7 @@ function drawPlayer(ctx, p, time) {
     x - 11, headY - 15, 3,
     x, headY, headHeight + 4
   );
+
   faceGradient.addColorStop(0, "#f0c19a");
   faceGradient.addColorStop(.55, skin);
   faceGradient.addColorStop(1, "#75452f");
@@ -1528,7 +1527,6 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x, headY, headWidth, headHeight, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Hair and facial hair are tailored to each selected legend.
   ctx.fillStyle = "#201916";
 
   if (look.hair === "receding") {
@@ -1600,7 +1598,6 @@ function drawPlayer(ctx, p, time) {
     ctx.stroke();
   }
 
-  // Eyebrows.
   ctx.strokeStyle = "#30201b";
   ctx.lineWidth = 6;
   ctx.lineCap = "round";
@@ -1611,7 +1608,6 @@ function drawPlayer(ctx, p, time) {
   ctx.quadraticCurveTo(x + 16, headY - 23, x + 26, headY - 12);
   ctx.stroke();
 
-  // Eyes.
   for (const side of [-1, 1]) {
     const eyeX = x + side * 14;
     const eyeY = headY - 3;
@@ -1627,7 +1623,6 @@ function drawPlayer(ctx, p, time) {
     ctx.fill();
   }
 
-  // Nose.
   ctx.fillStyle = "#75452f";
   ctx.beginPath();
   ctx.ellipse(x + face * 2, headY + 10, 11, 12, 0, 0, Math.PI * 2);
@@ -1638,7 +1633,6 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x - face * 2, headY + 7, 7, 7, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Big smile and teeth.
   ctx.fillStyle = "#241217";
   ctx.beginPath();
   ctx.ellipse(x + face * 2, headY + 25, 23, 13, 0, 0, Math.PI * 2);
@@ -1654,7 +1648,6 @@ function drawPlayer(ctx, p, time) {
   ctx.ellipse(x + face * 2, headY + 32, 13, 5, 0, 0, Math.PI);
   ctx.fill();
 
-  // Player name above the caricature.
   ctx.save();
   ctx.font = "900 14px Arial";
   ctx.textAlign = "center";
@@ -1738,7 +1731,6 @@ function drawShotMeter(ctx, x, y, charge) {
 
   rounded(ctx, left, y, w, h, 5, gradient);
 
-  // Smoothly interpolated release indicator.
   ctx.fillStyle = "#fff";
   ctx.fillRect(
     left + w * normalized - 2,
@@ -1884,127 +1876,6 @@ function drawJumpBallCountdown(ctx, count) {
   ctx.restore();
 }
 
-function abilityIconFor(p) {
-  const icons = {
-    lebron: "🛡️",
-    steph: "🎯",
-    jordan: "⚡",
-    shaq: "💪",
-    kareem: "🏀"
-  };
-
-  return icons[p.characterId] || "★";
-}
-
-function abilityColorFor(p) {
-  const colors = {
-    lebron: "#f0c46d",
-    steph: "#72b9ff",
-    jordan: "#f5df69",
-    shaq: "#d69b72",
-    kareem: "#9be0bb"
-  };
-
-  return colors[p.characterId] || "#ffc36e";
-}
-
-// Public cooldown meters: both players see both abilities at all times.
-// The circular fill grows clockwise and becomes a completely colored disc when ready.
-function drawAbilityIndicators(ctx, players) {
-  for (const p of players) {
-    const cx = p.side === 1 ? 82 : 1118;
-    const cy = 58;
-    const radius = 25;
-
-    const progress = clamp(
-      p.abilityFill ?? (p.abilityCooldownMs <= 0 ? 1 : 0),
-      0,
-      1
-    );
-
-    const color = abilityColorFor(p);
-    const ready = progress >= 0.999;
-    const icon = abilityIconFor(p);
-
-    ctx.save();
-
-    // Dark plate and outline.
-    ctx.fillStyle = "#091321ef";
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Empty cooldown background.
-    ctx.fillStyle = "#344254";
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Cooldown progress sector.
-    if (progress > 0) {
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.arc(
-        cx,
-        cy,
-        radius,
-        -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * progress
-      );
-      ctx.closePath();
-
-      ctx.fillStyle = color;
-      ctx.globalAlpha = ready ? 1 : .88;
-      ctx.fill();
-    }
-
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = ready ? color : "#a9b6c6";
-    ctx.lineWidth = ready ? 3.5 : 2;
-    ctx.shadowColor = ready ? color : "transparent";
-    ctx.shadowBlur = ready ? 12 : 0;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + 1, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Character ability icon remains visible while the meter recharges.
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "bold 22px Arial";
-    ctx.fillStyle = ready ? "#102033" : "#ffffff";
-    ctx.shadowColor = "#000";
-    ctx.shadowBlur = 4;
-    ctx.fillText(icon, cx, cy + 1);
-
-    const cooldownSeconds = Math.ceil(
-      (p.abilityCooldownMs || 0) / 1000
-    );
-
-    // Small READY / cooldown label under the circle.
-    ctx.shadowBlur = 4;
-    ctx.font = "900 10px Arial";
-    ctx.textAlign = "center";
-    ctx.fillStyle = ready ? color : "#e2e9f2";
-    ctx.fillText(
-      ready ? "READY" : `${cooldownSeconds}s`,
-      cx,
-      cy + radius + 17
-    );
-
-    // Player-side label.
-    ctx.font = "900 10px Arial";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(
-      p.characterName || `PLAYER ${p.side}`,
-      cx,
-      cy - radius - 12
-    );
-
-    ctx.restore();
-  }
-}
-
 let lastFrame = performance.now();
 
 function animate(now) {
@@ -2023,7 +1894,6 @@ function animate(now) {
     });
   }
 
-  // Interpolate positions between 30 FPS server snapshots.
   const smooth = 1 - Math.exp(-dt * 18);
 
   displayState.players = targetState.players.map((target, index) => {
@@ -2073,7 +1943,6 @@ function draw(state, time) {
   drawHoop(ctx, 48, 1);
   drawHoop(ctx, 1152, -1);
 
-  // Draw both public ability meters above their respective baskets.
   drawAbilityIndicators(ctx, state.players);
 
   state.players.forEach(p => {
@@ -2087,7 +1956,6 @@ function draw(state, time) {
     time
   );
 
-  // Synchronized jump-ball countdown from the server.
   drawJumpBallCountdown(ctx, state.clock?.jumpBallCountdown);
 
   const p1 = state.players.find(p => p.side === 1);
@@ -2102,13 +1970,8 @@ function draw(state, time) {
   const mine = state.players.find(p => p.side === mySide);
 
   if (mine) {
-    const cooldown = Math.ceil(
-      (mine.abilityCooldownMs || 0) / 1000
-    );
-
-    const active = Math.ceil(
-      (mine.abilityRemainingMs || 0) / 1000
-    );
+    const cooldown = Math.ceil((mine.abilityCooldownMs || 0) / 1000);
+    const active = Math.ceil((mine.abilityRemainingMs || 0) / 1000);
 
     $("abilityStatus").textContent = mine.abilityActive
       ? `E · ${mine.ability.toUpperCase()} ACTIVE · ${active}s`
