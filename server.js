@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
 app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
@@ -30,20 +31,32 @@ const JUMP_POWER = 665;
 const GRAVITY = 1250;
 const BALL_GRAVITY = 820;
 
-// JUMP BALL SETTINGS
+// JUMP BALL
 const JUMP_BALL_TOSS_SPEED = 480;
 
-// DASH SETTINGS
+// DASH
 const DASH_SPEED = 850;
 const DASH_DURATION_MS = 180;
 const DASH_COOLDOWN_MS = 1100;
 
-// BALL PHYSICS SETTINGS
+// BALL PHYSICS
 const BALL_BOUNCE_MULTIPLIER = 0.43;
 const BALL_MIN_BOUNCE_SPEED = 65;
 const BALL_GROUND_FRICTION = 0.93;
 const BALL_STOP_SPEED = 18;
 const BALL_PICKUP_RADIUS = 88;
+
+// STEAL SETTINGS
+const STEAL_RANGE = 48;
+const STEAL_COOLDOWN_MS = 1000;
+
+// SHOT CHARGE
+const SHOT_CHARGE_RATE = 1.5;
+const GREEN_MIN = 0.66;
+const GREEN_MAX = 0.78;
+const PERFECT_RELEASE = 0.72;
+
+const THREE_POINT_DISTANCE = 330;
 
 const TICK_RATE = 60;
 const SNAPSHOT_EVERY = 2;
@@ -51,13 +64,10 @@ const SNAPSHOT_EVERY = 2;
 const REGULATION_MS = 60000;
 const OVERTIME_MS = 15000;
 
-const GREEN_MIN = 0.66;
-const GREEN_MAX = 0.78;
-const PERFECT_RELEASE = 0.72;
-const THREE_POINT_DISTANCE = 330;
-
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-const makeCode = () => crypto.randomBytes(3).toString("hex").toUpperCase();
+
+const makeCode = () =>
+  crypto.randomBytes(3).toString("hex").toUpperCase();
 
 function cleanName(value) {
   return String(value || "Player")
@@ -71,26 +81,32 @@ function createPlayer(socket, name, side) {
     id: socket.id,
     name: cleanName(name),
     side,
+
     x: side === 1 ? 510 : 690,
     y: COURT.floor,
     vx: 0,
     vy: 0,
+
     score: 0,
     ready: false,
+
     input: {},
     previousInput: {},
+
     shootStartedAt: null,
+
     lastStealAt: 0,
     lastPumpFakeAt: 0,
 
-    // Dash tracking.
     lastDashAt: 0,
     dashUntil: 0,
     dashDirection: 0,
 
     stunnedUntil: 0,
+
     action: "idle",
     actionUntil: 0,
+
     dunking: false
   };
 }
@@ -99,16 +115,22 @@ function createBall() {
   return {
     x: 600,
     y: 330,
+
     vx: 0,
     vy: 0,
+
     owner: null,
     pickupLockoutUntil: 0,
+
     dunking: false,
     dunkTimer: 0,
     dunkScorerSide: null,
+
     shotBySide: null,
     shotPoints: 2,
+
     pendingScore: null,
+
     previousX: 600,
     previousY: 330
   };
@@ -123,9 +145,10 @@ function formatTime(ms) {
 }
 
 function getClock(room, now = Date.now()) {
-  const countdown = room.jumpBallStartsAt && now < room.jumpBallStartsAt
-    ? Math.ceil((room.jumpBallStartsAt - now) / 1000)
-    : 0;
+  const countdown =
+    room.jumpBallStartsAt && now < room.jumpBallStartsAt
+      ? Math.ceil((room.jumpBallStartsAt - now) / 1000)
+      : 0;
 
   const remainingMs = Math.max(0, room.periodEndsAt - now);
 
@@ -133,11 +156,13 @@ function getClock(room, now = Date.now()) {
     remainingMs,
     overtime: room.overtime,
     jumpBallCountdown: countdown,
+
     label: countdown > 0
       ? "TIP-OFF"
       : room.overtime
         ? `OT ${room.overtime} · ${formatTime(remainingMs)}`
         : formatTime(remainingMs),
+
     gameOver: !!room.gameOver
   };
 }
@@ -145,20 +170,22 @@ function getClock(room, now = Date.now()) {
 function publicRoom(room, mySide = null) {
   return {
     code: room.code,
+
     players: room.players.map(p => ({
       name: p.name,
       side: p.side,
       score: p.score,
       ready: p.ready
     })),
+
     started: room.started,
     mySide
   };
 }
 
 // Each player receives their own state packet.
-// Both players can see the other player's charging animation,
-// but only the shooter receives their charge value and meter flag.
+// Both can see charging animations, but only the shooter
+// receives their actual charge value and shot meter.
 function emitState(room, now = Date.now()) {
   const clock = getClock(room, now);
 
@@ -168,33 +195,42 @@ function emitState(room, now = Date.now()) {
         const isViewer = p.id === viewer.id;
         const charging = p.shootStartedAt !== null;
 
+        const charge = charging
+          ? clamp(
+              ((now - p.shootStartedAt) / 1000) * SHOT_CHARGE_RATE,
+              0,
+              1.2
+            )
+          : 0;
+
         return {
           name: p.name,
           side: p.side,
+
           x: p.x,
           y: p.y,
           vx: p.vx,
           vy: p.vy,
+
           score: p.score,
           action: p.action,
           stunned: p.stunnedUntil > now,
 
           charging,
 
-          // Private shot meter data.
           showShotMeter: isViewer && charging,
-          charge: isViewer && charging
-            ? clamp((now - p.shootStartedAt) / 1000, 0, 1.2)
-            : 0
+          charge: isViewer ? charge : 0
         };
       }),
 
       ball: {
         x: room.ball.x,
         y: room.ball.y,
+
         owner: room.ball.owner
           ? room.players.find(p => p.id === room.ball.owner)?.side || null
           : null,
+
         dunking: room.ball.dunking,
         pendingScore: !!room.ball.pendingScore
       },
@@ -212,10 +248,13 @@ function startGame(room) {
   room.gameOver = false;
   room.overtime = 0;
 
+  // Three-second countdown before the toss.
   room.jumpBallStartsAt = now + 3000;
   room.jumpBallTossStarted = false;
 
+  // Regulation begins when the ball is tossed.
   room.periodEndsAt = room.jumpBallStartsAt + REGULATION_MS;
+
   room.lastTick = now;
   room.snapshotCounter = 0;
 
@@ -242,9 +281,12 @@ function startGame(room) {
     p.lastDashAt = 0;
     p.dashUntil = 0;
     p.dashDirection = 0;
+
+    p.lastStealAt = 0;
+    p.lastPumpFakeAt = 0;
   });
 
-  // Ball begins near the players, then gets tossed upward.
+  // Ball starts at center court, then gets tossed upward.
   room.ball = createBall();
   room.ball.x = 600;
   room.ball.y = 350;
@@ -260,7 +302,7 @@ function startGame(room) {
 function followHolder(ball, player) {
   const direction = player.side === 1 ? 1 : -1;
 
-  // Raise the ball during a pump fake or normal shot charge.
+  // Raise the ball during pump fakes and shot charging.
   if (
     player.shootStartedAt !== null ||
     player.action === "pumpFake"
@@ -293,10 +335,13 @@ function movePlayer(p, dt) {
     return;
   }
 
-  if (p.action === "stunned") p.action = "idle";
+  if (p.action === "stunned") {
+    p.action = "idle";
+  }
 
   const direction =
-    (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
+    (p.input.right ? 1 : 0) -
+    (p.input.left ? 1 : 0);
 
   const grounded = p.y >= COURT.floor - 0.1;
 
@@ -315,7 +360,8 @@ function movePlayer(p, dt) {
         acceleration * dt
       );
     } else {
-      const friction = (grounded ? FRICTION : AIR_FRICTION) * dt;
+      const friction =
+        (grounded ? FRICTION : AIR_FRICTION) * dt;
 
       p.vx = Math.abs(p.vx) <= friction
         ? 0
@@ -323,7 +369,11 @@ function movePlayer(p, dt) {
     }
   }
 
-  p.x = clamp(p.x + p.vx * dt, 35, COURT.width - 35);
+  p.x = clamp(
+    p.x + p.vx * dt,
+    35,
+    COURT.width - 35
+  );
 
   if (p.input.up && !p.previousInput.up && grounded) {
     p.vy = -JUMP_POWER;
@@ -353,10 +403,7 @@ function movePlayer(p, dt) {
   }
 }
 
-// UPDATED BALL PHYSICS:
-// The ball bounces when it hits the floor with enough speed.
-// Small bounces settle into a roll, and rolling friction stops
-// the ball instead of allowing it to glide endlessly.
+// Ball bounce and rolling physics.
 function updateFreeBall(ball, dt) {
   ball.previousX = ball.x;
   ball.previousY = ball.y;
@@ -372,36 +419,31 @@ function updateFreeBall(ball, dt) {
   if (ball.y >= COURT.ballFloor) {
     ball.y = COURT.ballFloor;
 
-    // Only bounce if the ball hits the floor with meaningful speed.
     if (ball.vy > BALL_MIN_BOUNCE_SPEED) {
       ball.vy = -ball.vy * BALL_BOUNCE_MULTIPLIER;
     } else {
-      // Settle the ball onto the floor.
       ball.vy = 0;
 
-      // Stronger rolling friction while on the floor.
+      // Strong rolling friction.
       ball.vx *= Math.pow(
         BALL_GROUND_FRICTION,
         dt * 60
       );
 
-      // Fully stop tiny remaining movement.
       if (Math.abs(ball.vx) < BALL_STOP_SPEED) {
         ball.vx = 0;
       }
     }
   }
 
-  // Court side boundaries.
   if (ball.x < 20 || ball.x > COURT.width - 20) {
     ball.vx *= -0.55;
     ball.x = clamp(ball.x, 20, COURT.width - 20);
   }
 }
 
-// UPDATED PICKUP RANGE:
-// Measure against the player's lower body instead of the head.
-// This lets players collect balls sitting on the floor.
+// Pickup distance is measured near the lower body,
+// making floor balls easier to collect.
 function tryPickupBall(room) {
   const ball = room.ball;
 
@@ -413,7 +455,6 @@ function tryPickupBall(room) {
   ) return;
 
   const nearest = room.players.map(player => {
-    // Pickup point is around the player's hands/lower torso.
     const pickupY = player.y - 35;
 
     const distance = Math.hypot(
@@ -421,10 +462,7 @@ function tryPickupBall(room) {
       pickupY - ball.y
     );
 
-    return {
-      player,
-      distance
-    };
+    return { player, distance };
   }).sort((a, b) => a.distance - b.distance)[0];
 
   if (nearest && nearest.distance < BALL_PICKUP_RADIUS) {
@@ -436,9 +474,11 @@ function tryPickupBall(room) {
 
 function shootBall(room, p, heldMilliseconds) {
   const ball = room.ball;
+
   if (ball.owner !== p.id) return;
 
   const direction = p.side === 1 ? 1 : -1;
+
   const hoopX = p.side === 1
     ? COURT.rightHoop
     : COURT.leftHoop;
@@ -446,7 +486,7 @@ function shootBall(room, p, heldMilliseconds) {
   const distance = Math.abs(hoopX - p.x);
   const airborne = p.y < COURT.floor - 24;
 
-  // A close-range airborne shot becomes a dunk.
+  // Close-range airborne shot becomes a dunk.
   if (distance < 125 && airborne) {
     p.dunking = true;
     p.action = "dunk";
@@ -458,16 +498,27 @@ function shootBall(room, p, heldMilliseconds) {
     ball.dunkScorerSide = p.side;
     ball.shotBySide = p.side;
     ball.shotPoints = 2;
+
     ball.x = hoopX - direction * 14;
     ball.y = COURT.hoopY - 38;
     ball.vx = 0;
     ball.vy = 100;
+
     ball.pickupLockoutUntil = Date.now() + 1500;
     return;
   }
 
-  const charge = clamp(heldMilliseconds / 1000, 0, 1.2);
-  const greenRelease = charge >= GREEN_MIN && charge <= GREEN_MAX;
+  // CHARGE SPEED IS NOW 1.5x.
+  // The meter reaches the green zone sooner.
+  const charge = clamp(
+    (heldMilliseconds / 1000) * SHOT_CHARGE_RATE,
+    0,
+    1.2
+  );
+
+  const greenRelease =
+    charge >= GREEN_MIN &&
+    charge <= GREEN_MAX;
 
   const timingQuality = greenRelease
     ? 1
@@ -483,25 +534,40 @@ function shootBall(room, p, heldMilliseconds) {
     1
   );
 
-  const defender = room.players.find(other => other.id !== p.id);
+  const defender = room.players.find(
+    other => other.id !== p.id
+  );
 
   const defenderDistance = defender
-    ? Math.hypot(defender.x - p.x, defender.y - p.y)
+    ? Math.hypot(
+        defender.x - p.x,
+        defender.y - p.y
+      )
     : 999;
 
-  const pressure = clamp((165 - defenderDistance) / 165, 0, 1);
+  const pressure = clamp(
+    (165 - defenderDistance) / 165,
+    0,
+    1
+  );
+
   const quality = clamp(
     timingQuality * distanceQuality - pressure * 0.34,
     0.08,
     1
   );
 
-  const points = distance >= THREE_POINT_DISTANCE ? 3 : 2;
+  const points =
+    distance >= THREE_POINT_DISTANCE ? 3 : 2;
+
   const missRange = 125 * (1 - quality) + 4;
 
-  const targetX = hoopX + (Math.random() * 2 - 1) * missRange;
+  const targetX =
+    hoopX + (Math.random() * 2 - 1) * missRange;
+
   const targetY =
-    COURT.hoopY + (Math.random() * 2 - 1) * missRange * 0.45;
+    COURT.hoopY +
+    (Math.random() * 2 - 1) * missRange * 0.45;
 
   ball.owner = null;
   ball.x = p.x + direction * 30;
@@ -518,16 +584,20 @@ function shootBall(room, p, heldMilliseconds) {
     740
   );
 
-  const flightTime = horizontalDistance / horizontalSpeed;
+  const flightTime =
+    horizontalDistance / horizontalSpeed;
+
   const verticalDistance = targetY - ball.y;
 
   ball.vx = direction * horizontalSpeed;
+
   ball.vy = (
     verticalDistance -
     0.5 * BALL_GRAVITY * flightTime * flightTime
   ) / flightTime;
 
   ball.vy = Math.min(ball.vy, -270);
+
   ball.shotBySide = p.side;
   ball.shotPoints = points;
   ball.pickupLockoutUntil = Date.now() + 420;
@@ -568,8 +638,11 @@ function handleBlocks(room) {
 
   const direction = Math.sign(ball.vx) || 1;
 
-  ball.vx = -direction * Math.max(170, Math.abs(ball.vx) * 0.5);
+  ball.vx =
+    -direction * Math.max(170, Math.abs(ball.vx) * 0.5);
+
   ball.vy = -Math.max(200, Math.abs(ball.vy) * 0.35);
+
   ball.shotBySide = null;
   ball.pickupLockoutUntil = Date.now() + 180;
 
@@ -581,31 +654,52 @@ function handleBlocks(room) {
   });
 }
 
+// HARDER STEAL SYSTEM:
+// - Shift must be pressed, not continuously held.
+// - The defender must be within 48 pixels.
+// - Every attempt consumes a 1-second cooldown.
+// - Holding Shift cannot repeatedly trigger attempts.
 function handleSteals(room) {
   const ball = room.ball;
   const now = Date.now();
 
   for (const player of room.players) {
-    if (!player.input.steal || now - player.lastStealAt < 650) {
+    const newlyPressed =
+      player.input.steal &&
+      !player.previousInput.steal;
+
+    if (!newlyPressed) continue;
+
+    if (now - player.lastStealAt < STEAL_COOLDOWN_MS) {
       continue;
     }
 
-    const opponent = room.players.find(p => p.id !== player.id);
+    const opponent = room.players.find(
+      p => p.id !== player.id
+    );
 
-    if (!opponent || opponent.stunnedUntil > now) continue;
+    if (!opponent || opponent.stunnedUntil > now) {
+      continue;
+    }
+
+    // Consume the attempt even if the player is out of range.
+    player.lastStealAt = now;
 
     const distance = Math.hypot(
       player.x - opponent.x,
       player.y - opponent.y
     );
 
-    if (distance > 72) continue;
-
-    player.lastStealAt = now;
+    if (distance > STEAL_RANGE) continue;
 
     if (ball.owner === opponent.id) {
       ball.owner = player.id;
+
+      ball.vx = 0;
+      ball.vy = 0;
+
       player.action = "steal";
+      player.actionUntil = now + 250;
 
       io.to(room.code).emit("stolen", {
         player: player.name
@@ -617,6 +711,7 @@ function handleSteals(room) {
       opponent.stunnedUntil = now + 1500;
       opponent.vx = 0;
       opponent.vy = 0;
+
       opponent.action = "stunned";
       opponent.actionUntil = now + 1500;
 
@@ -631,11 +726,15 @@ function givePossession(room, player) {
   room.players.forEach(p => {
     p.x = p.side === 1 ? 240 : 960;
     p.y = COURT.floor;
+
     p.vx = 0;
     p.vy = 0;
+
     p.dunking = false;
     p.action = "idle";
+
     p.shootStartedAt = null;
+
     p.input.shoot = false;
     p.previousInput.shoot = false;
   });
@@ -651,7 +750,10 @@ function scoreBasket(room, scorer, points) {
 
   scorer.score += points;
 
-  const receiver = room.players.find(p => p.id !== scorer.id);
+  const receiver = room.players.find(
+    p => p.id !== scorer.id
+  );
+
   const hoopX = scorer.side === 1
     ? COURT.rightHoop
     : COURT.leftHoop;
@@ -660,10 +762,12 @@ function scoreBasket(room, scorer, points) {
   room.ball.owner = null;
   room.ball.shotBySide = null;
 
+  // Let the ball visibly fall through the net.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
   room.ball.vy = 125;
+
   room.ball.previousX = hoopX;
   room.ball.previousY = room.ball.y;
 
@@ -707,7 +811,8 @@ function checkBasket(room) {
   );
 
   const crossingX =
-    ball.previousX + (ball.x - ball.previousX) * fraction;
+    ball.previousX +
+    (ball.x - ball.previousX) * fraction;
 
   let scorer = null;
 
@@ -756,6 +861,7 @@ function finishGame(room) {
   room.started = false;
 
   const [p1, p2] = room.players;
+
   const winner = p1.score === p2.score
     ? null
     : p1.score > p2.score
@@ -808,19 +914,27 @@ io.on("connection", socket => {
 
     const room = {
       code,
-      players: [createPlayer(socket, name, 1)],
+
+      players: [
+        createPlayer(socket, name, 1)
+      ],
+
       ball: createBall(),
+
       started: false,
       gameOver: false,
       overtime: 0,
+
       jumpBallStartsAt: null,
       jumpBallTossStarted: false,
+
       periodEndsAt: 0,
       lastTick: Date.now(),
       snapshotCounter: 0
     };
 
     rooms.set(code, room);
+
     socket.join(code);
     socket.data.room = code;
 
@@ -840,23 +954,39 @@ io.on("connection", socket => {
     }
 
     if (room.players.length >= 2) {
-      return socket.emit("joinError", "That room is full.");
+      return socket.emit(
+        "joinError",
+        "That room is full."
+      );
     }
 
-    room.players.push(createPlayer(socket, name, 2));
+    room.players.push(
+      createPlayer(socket, name, 2)
+    );
 
     socket.join(code);
     socket.data.room = code;
 
-    io.to(code).emit("roomUpdate", publicRoom(room));
-    socket.emit("roomJoined", publicRoom(room, 2));
+    io.to(code).emit(
+      "roomUpdate",
+      publicRoom(room)
+    );
+
+    socket.emit(
+      "roomJoined",
+      publicRoom(room, 2)
+    );
   });
 
   socket.on("ready", () => {
     const room = rooms.get(socket.data.room);
+
     if (!room || room.started) return;
 
-    const player = room.players.find(p => p.id === socket.id);
+    const player = room.players.find(
+      p => p.id === socket.id
+    );
+
     if (!player) return;
 
     player.ready = true;
@@ -868,7 +998,10 @@ io.on("connection", socket => {
       startGame(room);
     }
 
-    io.to(room.code).emit("roomUpdate", publicRoom(room));
+    io.to(room.code).emit(
+      "roomUpdate",
+      publicRoom(room)
+    );
   });
 
   // SERVER-AUTHORITATIVE DASH
@@ -904,11 +1037,13 @@ io.on("connection", socket => {
     player.lastDashAt = now;
     player.dashDirection = direction;
     player.dashUntil = now + DASH_DURATION_MS;
+
     player.vx = direction * DASH_SPEED;
   });
 
   socket.on("input", input => {
     const room = rooms.get(socket.data.room);
+
     if (!room || !room.started) return;
 
     const p = room.players.find(
@@ -928,13 +1063,14 @@ io.on("connection", socket => {
 
     const now = Date.now();
 
-    // Remember movement and jump inputs during the countdown.
-    // Movement and physics remain frozen until the toss starts.
+    // Save movement and jump inputs during the countdown.
+    // Physics stays frozen until the toss starts.
     if (now < room.jumpBallStartsAt) {
       p.input = {
         left: next.left,
         right: next.right,
         up: next.up,
+
         shoot: false,
         steal: false,
         pumpFake: false
@@ -956,7 +1092,7 @@ io.on("connection", socket => {
       p.actionUntil = now + 500;
     }
 
-    // Begin charging a shot.
+    // Start charging a shot.
     if (
       next.shoot &&
       !p.input.shoot &&
@@ -986,6 +1122,7 @@ io.on("connection", socket => {
 
   socket.on("disconnect", () => {
     const room = rooms.get(socket.data.room);
+
     if (!room) return;
 
     room.players = room.players.filter(
@@ -997,10 +1134,12 @@ io.on("connection", socket => {
     } else {
       room.started = false;
       room.gameOver = false;
+
       room.players[0].ready = false;
       room.ball = createBall();
 
       io.to(room.code).emit("opponentLeft");
+
       io.to(room.code).emit(
         "roomUpdate",
         publicRoom(room)
@@ -1009,14 +1148,16 @@ io.on("connection", socket => {
   });
 });
 
-// Physics runs at 60 FPS. State snapshots are sent at 30 FPS.
+// 60 FPS physics, 30 FPS network snapshots.
 setInterval(() => {
   const now = Date.now();
 
   for (const room of rooms.values()) {
-    if (!room.started || room.players.length !== 2) continue;
+    if (!room.started || room.players.length !== 2) {
+      continue;
+    }
 
-    // Freeze players and ball during the initial countdown.
+    // Freeze players and ball during countdown.
     if (now < room.jumpBallStartsAt) {
       room.snapshotCounter += 1;
 
@@ -1028,16 +1169,19 @@ setInterval(() => {
       continue;
     }
 
-    // Toss the ball upward exactly once when the countdown ends.
+    // Toss ball upward exactly once.
     if (!room.jumpBallTossStarted) {
       room.jumpBallTossStarted = true;
+
       room.ball.vx = 0;
       room.ball.vy = -JUMP_BALL_TOSS_SPEED;
       room.ball.owner = null;
+
       room.lastTick = now;
     }
 
     updateGameClock(room, now);
+
     if (!room.started) continue;
 
     const dt = Math.min(
@@ -1047,7 +1191,7 @@ setInterval(() => {
 
     room.lastTick = now;
 
-    // Movement begins as the toss starts.
+    // Move players as soon as the toss begins.
     for (const player of room.players) {
       movePlayer(player, dt);
     }
@@ -1081,10 +1225,14 @@ setInterval(() => {
 
       if (!room.ball.owner) {
         updateFreeBall(room.ball, dt);
+
         handleBlocks(room);
         checkBasket(room);
 
-        if (!room.ball.pendingScore && !room.ball.owner) {
+        if (
+          !room.ball.pendingScore &&
+          !room.ball.owner
+        ) {
           tryPickupBall(room);
         }
       }
