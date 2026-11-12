@@ -6,7 +6,6 @@ const crypto = require("crypto");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
@@ -31,32 +30,46 @@ const JUMP_POWER = 665;
 const GRAVITY = 1250;
 const BALL_GRAVITY = 820;
 
-// JUMP BALL
+// Jump-ball opening.
 const JUMP_BALL_TOSS_SPEED = 480;
 
-// DASH
+// Dash.
 const DASH_SPEED = 850;
 const DASH_DURATION_MS = 180;
 const DASH_COOLDOWN_MS = 1100;
 
-// BALL PHYSICS
-const BALL_BOUNCE_MULTIPLIER = 0.43;
-const BALL_MIN_BOUNCE_SPEED = 65;
-const BALL_GROUND_FRICTION = 0.93;
-const BALL_STOP_SPEED = 18;
-const BALL_PICKUP_RADIUS = 88;
+// Responsive, server-authoritative steals.
+const STEAL_RANGE = 58;
+const STEAL_COOLDOWN_MS = 700;
 
-// STEAL SETTINGS
-const STEAL_RANGE = 48;
-const STEAL_COOLDOWN_MS = 1000;
-
-// SHOT CHARGE
+// The shot meter reaches its green band faster than before.
 const SHOT_CHARGE_RATE = 1.5;
-const GREEN_MIN = 0.66;
-const GREEN_MAX = 0.78;
-const PERFECT_RELEASE = 0.72;
+const ABILITY_COOLDOWN_MS = 14000;
 
-const THREE_POINT_DISTANCE = 330;
+const CHARACTERS = {
+  lebron: {
+    name: "LeBron James", number: "23", speed: 1.00, shooting: 1.04,
+    power: 1.10, jump: 1.04, ability: "Chase Down", abilityId: "chasedown"
+  },
+  steph: {
+    name: "Stephen Curry", number: "30", speed: 1.02, shooting: 1.15,
+    power: 0.88, jump: 0.96, ability: "Range Extender", abilityId: "range"
+  },
+  jordan: {
+    name: "Michael Jordan", number: "23", speed: 1.10, shooting: 1.10,
+    power: 1.08, jump: 1.10, ability: "First Step", abilityId: "firststep"
+  },
+  shaq: {
+    name: "Shaquille O'Neal", number: "34", speed: 0.86, shooting: 0.86,
+    power: 1.25, jump: 0.92, ability: "Diesel Mode", abilityId: "diesel"
+  },
+  kareem: {
+    name: "Kareem Abdul-Jabbar", number: "33", speed: 0.94, shooting: 1.06,
+    power: 1.13, jump: 1.00, ability: "Skyhook", abilityId: "skyhook"
+  }
+};
+
+const DEFAULT_CHARACTER_ORDER = ["lebron", "steph", "jordan", "shaq", "kareem"];
 
 const TICK_RATE = 60;
 const SNAPSHOT_EVERY = 2;
@@ -64,10 +77,13 @@ const SNAPSHOT_EVERY = 2;
 const REGULATION_MS = 60000;
 const OVERTIME_MS = 15000;
 
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const GREEN_MIN = 0.66;
+const GREEN_MAX = 0.78;
+const PERFECT_RELEASE = 0.72;
+const THREE_POINT_DISTANCE = 330;
 
-const makeCode = () =>
-  crypto.randomBytes(3).toString("hex").toUpperCase();
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const makeCode = () => crypto.randomBytes(3).toString("hex").toUpperCase();
 
 function cleanName(value) {
   return String(value || "Player")
@@ -81,32 +97,27 @@ function createPlayer(socket, name, side) {
     id: socket.id,
     name: cleanName(name),
     side,
+    characterId: side === 1 ? "lebron" : "steph",
 
     x: side === 1 ? 510 : 690,
     y: COURT.floor,
     vx: 0,
     vy: 0,
-
     score: 0,
     ready: false,
-
     input: {},
     previousInput: {},
-
     shootStartedAt: null,
-
     lastStealAt: 0,
     lastPumpFakeAt: 0,
-
     lastDashAt: 0,
     dashUntil: 0,
     dashDirection: 0,
-
+    abilityUntil: 0,
+    abilityCooldownUntil: 0,
     stunnedUntil: 0,
-
     action: "idle",
     actionUntil: 0,
-
     dunking: false
   };
 }
@@ -115,22 +126,16 @@ function createBall() {
   return {
     x: 600,
     y: 330,
-
     vx: 0,
     vy: 0,
-
     owner: null,
     pickupLockoutUntil: 0,
-
     dunking: false,
     dunkTimer: 0,
     dunkScorerSide: null,
-
     shotBySide: null,
     shotPoints: 2,
-
     pendingScore: null,
-
     previousX: 600,
     previousY: 330
   };
@@ -140,15 +145,13 @@ function formatTime(ms) {
   const seconds = Math.ceil(Math.max(0, ms) / 1000);
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
-
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
 function getClock(room, now = Date.now()) {
-  const countdown =
-    room.jumpBallStartsAt && now < room.jumpBallStartsAt
-      ? Math.ceil((room.jumpBallStartsAt - now) / 1000)
-      : 0;
+  const countdown = room.jumpBallStartsAt && now < room.jumpBallStartsAt
+    ? Math.ceil((room.jumpBallStartsAt - now) / 1000)
+    : 0;
 
   const remainingMs = Math.max(0, room.periodEndsAt - now);
 
@@ -156,36 +159,50 @@ function getClock(room, now = Date.now()) {
     remainingMs,
     overtime: room.overtime,
     jumpBallCountdown: countdown,
-
     label: countdown > 0
       ? "TIP-OFF"
       : room.overtime
         ? `OT ${room.overtime} · ${formatTime(remainingMs)}`
         : formatTime(remainingMs),
-
     gameOver: !!room.gameOver
   };
+}
+
+function characterFor(player) {
+  return CHARACTERS[player.characterId] || CHARACTERS.lebron;
+}
+
+function firstAvailableCharacter(room) {
+  const taken = new Set(room.players.map(p => p.characterId));
+  return DEFAULT_CHARACTER_ORDER.find(id => !taken.has(id)) || "lebron";
 }
 
 function publicRoom(room, mySide = null) {
   return {
     code: room.code,
-
-    players: room.players.map(p => ({
-      name: p.name,
-      side: p.side,
-      score: p.score,
-      ready: p.ready
+    players: room.players.map(p => {
+      const character = characterFor(p);
+      return {
+        name: p.name,
+        side: p.side,
+        score: p.score,
+        ready: p.ready,
+        characterId: p.characterId,
+        characterName: character.name,
+        jerseyNumber: character.number,
+        ability: character.ability
+      };
+    }),
+    characters: Object.entries(CHARACTERS).map(([id, character]) => ({
+      id,
+      ...character
     })),
-
     started: room.started,
     mySide
   };
 }
 
-// Each player receives their own state packet.
-// Both can see charging animations, but only the shooter
-// receives their actual charge value and shot meter.
+// Per-player packets keep the exact shot meter private to the shooter.
 function emitState(room, now = Date.now()) {
   const clock = getClock(room, now);
 
@@ -193,48 +210,43 @@ function emitState(room, now = Date.now()) {
     io.to(viewer.id).emit("state", {
       players: room.players.map(p => {
         const isViewer = p.id === viewer.id;
+        const character = characterFor(p);
         const charging = p.shootStartedAt !== null;
-
         const charge = charging
-          ? clamp(
-              ((now - p.shootStartedAt) / 1000) * SHOT_CHARGE_RATE,
-              0,
-              1.2
-            )
+          ? clamp(((now - p.shootStartedAt) / 1000) * SHOT_CHARGE_RATE, 0, 1.2)
           : 0;
 
         return {
           name: p.name,
           side: p.side,
-
+          characterId: p.characterId,
+          characterName: character.name,
+          jerseyNumber: character.number,
+          ability: character.ability,
+          abilityActive: p.abilityUntil > now,
+          abilityRemainingMs: Math.max(0, p.abilityUntil - now),
+          abilityCooldownMs: Math.max(0, p.abilityCooldownUntil - now),
           x: p.x,
           y: p.y,
           vx: p.vx,
           vy: p.vy,
-
           score: p.score,
           action: p.action,
           stunned: p.stunnedUntil > now,
-
           charging,
-
           showShotMeter: isViewer && charging,
           charge: isViewer ? charge : 0
         };
       }),
-
       ball: {
         x: room.ball.x,
         y: room.ball.y,
-
         owner: room.ball.owner
           ? room.players.find(p => p.id === room.ball.owner)?.side || null
           : null,
-
         dunking: room.ball.dunking,
         pendingScore: !!room.ball.pendingScore
       },
-
       clock,
       gameOver: !!room.gameOver
     });
@@ -247,46 +259,35 @@ function startGame(room) {
   room.started = true;
   room.gameOver = false;
   room.overtime = 0;
-
-  // Three-second countdown before the toss.
   room.jumpBallStartsAt = now + 3000;
   room.jumpBallTossStarted = false;
-
-  // Regulation begins when the ball is tossed.
   room.periodEndsAt = room.jumpBallStartsAt + REGULATION_MS;
-
   room.lastTick = now;
   room.snapshotCounter = 0;
 
   room.players.forEach((p, index) => {
     p.score = 0;
     p.ready = false;
-
     p.x = index === 0 ? 530 : 670;
     p.y = COURT.floor;
-
     p.vx = 0;
     p.vy = 0;
-
     p.input = {};
     p.previousInput = {};
-
     p.shootStartedAt = null;
     p.dunking = false;
-
     p.action = "idle";
     p.actionUntil = 0;
     p.stunnedUntil = 0;
-
+    p.lastStealAt = 0;
     p.lastDashAt = 0;
     p.dashUntil = 0;
     p.dashDirection = 0;
-
-    p.lastStealAt = 0;
-    p.lastPumpFakeAt = 0;
+    p.abilityUntil = 0;
+    p.abilityCooldownUntil = 0;
   });
 
-  // Ball starts at center court, then gets tossed upward.
+  // The ball rises from center court when the countdown ends.
   room.ball = createBall();
   room.ball.x = 600;
   room.ball.y = 350;
@@ -303,10 +304,7 @@ function followHolder(ball, player) {
   const direction = player.side === 1 ? 1 : -1;
 
   // Raise the ball during pump fakes and shot charging.
-  if (
-    player.shootStartedAt !== null ||
-    player.action === "pumpFake"
-  ) {
+  if (player.action === "pumpFake" || player.shootStartedAt !== null) {
     ball.x = player.x + direction * 15;
     ball.y = player.y - 190;
   } else {
@@ -335,48 +333,38 @@ function movePlayer(p, dt) {
     return;
   }
 
-  if (p.action === "stunned") {
-    p.action = "idle";
-  }
+  if (p.action === "stunned") p.action = "idle";
 
   const direction =
-    (p.input.right ? 1 : 0) -
-    (p.input.left ? 1 : 0);
+    (p.input.right ? 1 : 0) - (p.input.left ? 1 : 0);
 
   const grounded = p.y >= COURT.floor - 0.1;
+  const character = characterFor(p);
+  const activeSpeedBoost = p.characterId === "jordan" && p.abilityUntil > now ? 1.38 : 1;
+  const speed = PLAYER_SPEED * character.speed * activeSpeedBoost;
+  const acceleration = (grounded ? PLAYER_ACCEL : AIR_ACCEL) * character.speed * activeSpeedBoost;
 
-  // Dash temporarily overrides normal horizontal movement.
   if (p.dashUntil > now) {
     p.vx = p.dashDirection * DASH_SPEED;
+  } else if (direction) {
+    const target = direction * speed;
+    p.vx += clamp(
+      target - p.vx,
+      -acceleration * dt,
+      acceleration * dt
+    );
   } else {
-    const acceleration = grounded ? PLAYER_ACCEL : AIR_ACCEL;
+    const friction = (grounded ? FRICTION : AIR_FRICTION) * dt;
 
-    if (direction) {
-      const target = direction * PLAYER_SPEED;
-
-      p.vx += clamp(
-        target - p.vx,
-        -acceleration * dt,
-        acceleration * dt
-      );
-    } else {
-      const friction =
-        (grounded ? FRICTION : AIR_FRICTION) * dt;
-
-      p.vx = Math.abs(p.vx) <= friction
-        ? 0
-        : p.vx - Math.sign(p.vx) * friction;
-    }
+    p.vx = Math.abs(p.vx) <= friction
+      ? 0
+      : p.vx - Math.sign(p.vx) * friction;
   }
 
-  p.x = clamp(
-    p.x + p.vx * dt,
-    35,
-    COURT.width - 35
-  );
+  p.x = clamp(p.x + p.vx * dt, 35, COURT.width - 35);
 
   if (p.input.up && !p.previousInput.up && grounded) {
-    p.vy = -JUMP_POWER;
+    p.vy = -JUMP_POWER * character.jump;
     p.action = "jump";
   }
 
@@ -403,36 +391,24 @@ function movePlayer(p, dt) {
   }
 }
 
-// Ball bounce and rolling physics.
 function updateFreeBall(ball, dt) {
   ball.previousX = ball.x;
   ball.previousY = ball.y;
 
   ball.x += ball.vx * dt;
   ball.y += ball.vy * dt;
-
   ball.vy += BALL_GRAVITY * dt;
-
-  // Light air resistance.
   ball.vx *= Math.pow(0.999, dt * 60);
 
   if (ball.y >= COURT.ballFloor) {
     ball.y = COURT.ballFloor;
 
-    if (ball.vy > BALL_MIN_BOUNCE_SPEED) {
-      ball.vy = -ball.vy * BALL_BOUNCE_MULTIPLIER;
+    if (ball.vy > 65) {
+      ball.vy = -ball.vy * 0.43;
     } else {
       ball.vy = 0;
-
-      // Strong rolling friction.
-      ball.vx *= Math.pow(
-        BALL_GROUND_FRICTION,
-        dt * 60
-      );
-
-      if (Math.abs(ball.vx) < BALL_STOP_SPEED) {
-        ball.vx = 0;
-      }
+      ball.vx *= Math.pow(0.93, dt * 60);
+      if (Math.abs(ball.vx) < 18) ball.vx = 0;
     }
   }
 
@@ -442,8 +418,6 @@ function updateFreeBall(ball, dt) {
   }
 }
 
-// Pickup distance is measured near the lower body,
-// making floor balls easier to collect.
 function tryPickupBall(room) {
   const ball = room.ball;
 
@@ -454,18 +428,15 @@ function tryPickupBall(room) {
     Date.now() < ball.pickupLockoutUntil
   ) return;
 
-  const nearest = room.players.map(player => {
-    const pickupY = player.y - 35;
-
-    const distance = Math.hypot(
+  const nearest = room.players.map(player => ({
+    player,
+    distance: Math.hypot(
       player.x - ball.x,
-      pickupY - ball.y
-    );
+      (player.y - 35) - ball.y
+    )
+  })).sort((a, b) => a.distance - b.distance)[0];
 
-    return { player, distance };
-  }).sort((a, b) => a.distance - b.distance)[0];
-
-  if (nearest && nearest.distance < BALL_PICKUP_RADIUS) {
+  if (nearest && nearest.distance < 88) {
     ball.owner = nearest.player.id;
     ball.vx = 0;
     ball.vy = 0;
@@ -474,11 +445,9 @@ function tryPickupBall(room) {
 
 function shootBall(room, p, heldMilliseconds) {
   const ball = room.ball;
-
   if (ball.owner !== p.id) return;
 
   const direction = p.side === 1 ? 1 : -1;
-
   const hoopX = p.side === 1
     ? COURT.rightHoop
     : COURT.leftHoop;
@@ -486,8 +455,12 @@ function shootBall(room, p, heldMilliseconds) {
   const distance = Math.abs(hoopX - p.x);
   const airborne = p.y < COURT.floor - 24;
 
-  // Close-range airborne shot becomes a dunk.
-  if (distance < 125 && airborne) {
+  const character = characterFor(p);
+  const dieselActive = p.characterId === "shaq" && p.abilityUntil > Date.now();
+  const dunkRange = 125 + Math.max(0, character.power - 1) * 50 + (dieselActive ? 85 : 0);
+
+  // A close-range airborne shot becomes a dunk.
+  if (distance < dunkRange && airborne) {
     p.dunking = true;
     p.action = "dunk";
     p.actionUntil = Date.now() + 450;
@@ -498,76 +471,56 @@ function shootBall(room, p, heldMilliseconds) {
     ball.dunkScorerSide = p.side;
     ball.shotBySide = p.side;
     ball.shotPoints = 2;
-
     ball.x = hoopX - direction * 14;
     ball.y = COURT.hoopY - 38;
     ball.vx = 0;
     ball.vy = 100;
-
     ball.pickupLockoutUntil = Date.now() + 1500;
     return;
   }
 
-  // CHARGE SPEED IS NOW 1.5x.
-  // The meter reaches the green zone sooner.
-  const charge = clamp(
-    (heldMilliseconds / 1000) * SHOT_CHARGE_RATE,
-    0,
-    1.2
-  );
+  const charge = clamp((heldMilliseconds / 1000) * SHOT_CHARGE_RATE, 0, 1.2);
+  const greenRelease = charge >= GREEN_MIN && charge <= GREEN_MAX;
+  const stephRangeActive = p.characterId === "steph" && p.abilityUntil > Date.now();
+  const kareemSkyhookActive = p.characterId === "kareem" && p.abilityUntil > Date.now();
 
-  const greenRelease =
-    charge >= GREEN_MIN &&
-    charge <= GREEN_MAX;
-
-  const timingQuality = greenRelease
+  let timingQuality = greenRelease
     ? 1
     : clamp(
         1 - Math.abs(charge - PERFECT_RELEASE) / 0.78,
         0.08,
         0.92
       );
+  timingQuality = clamp(timingQuality * character.shooting, 0.08, 1);
+  if (kareemSkyhookActive) timingQuality = clamp(timingQuality + 0.16, 0.08, 1);
 
+  const effectiveDistance = stephRangeActive ? distance * 0.72 : distance;
   const distanceQuality = clamp(
-    1 - Math.max(0, distance - 300) / 1100,
+    1 - Math.max(0, effectiveDistance - 300) / 1100,
     0.35,
     1
   );
 
-  const defender = room.players.find(
-    other => other.id !== p.id
-  );
+  const defender = room.players.find(other => other.id !== p.id);
 
   const defenderDistance = defender
-    ? Math.hypot(
-        defender.x - p.x,
-        defender.y - p.y
-      )
+    ? Math.hypot(defender.x - p.x, defender.y - p.y)
     : 999;
 
-  const pressure = clamp(
-    (165 - defenderDistance) / 165,
-    0,
-    1
-  );
-
+  const pressure = clamp((165 - defenderDistance) / 165, 0, 1);
+  const pressurePenalty = kareemSkyhookActive ? 0.12 : 0.34;
   const quality = clamp(
-    timingQuality * distanceQuality - pressure * 0.34,
+    timingQuality * distanceQuality - pressure * pressurePenalty,
     0.08,
     1
   );
 
-  const points =
-    distance >= THREE_POINT_DISTANCE ? 3 : 2;
-
+  const points = distance >= THREE_POINT_DISTANCE ? 3 : 2;
   const missRange = 125 * (1 - quality) + 4;
 
-  const targetX =
-    hoopX + (Math.random() * 2 - 1) * missRange;
-
+  const targetX = hoopX + (Math.random() * 2 - 1) * missRange;
   const targetY =
-    COURT.hoopY +
-    (Math.random() * 2 - 1) * missRange * 0.45;
+    COURT.hoopY + (Math.random() * 2 - 1) * missRange * 0.45;
 
   ball.owner = null;
   ball.x = p.x + direction * 30;
@@ -584,20 +537,16 @@ function shootBall(room, p, heldMilliseconds) {
     740
   );
 
-  const flightTime =
-    horizontalDistance / horizontalSpeed;
-
+  const flightTime = horizontalDistance / horizontalSpeed;
   const verticalDistance = targetY - ball.y;
 
   ball.vx = direction * horizontalSpeed;
-
   ball.vy = (
     verticalDistance -
     0.5 * BALL_GRAVITY * flightTime * flightTime
   ) / flightTime;
 
   ball.vy = Math.min(ball.vy, -270);
-
   ball.shotBySide = p.side;
   ball.shotPoints = points;
   ball.pickupLockoutUntil = Date.now() + 420;
@@ -629,20 +578,20 @@ function handleBlocks(room) {
 
   if (!defender || defender.y >= COURT.floor - 18) return;
 
+  const lebronBoost = defender.characterId === "lebron" && defender.abilityUntil > Date.now();
+  const horizontalReach = lebronBoost ? 52 : 35;
+  const verticalReach = lebronBoost ? 215 : 160;
   const nearBall =
-    Math.abs(ball.x - defender.x) < 35 &&
+    Math.abs(ball.x - defender.x) < horizontalReach &&
     ball.y < defender.y - 25 &&
-    ball.y > defender.y - 160;
+    ball.y > defender.y - verticalReach;
 
   if (!nearBall) return;
 
   const direction = Math.sign(ball.vx) || 1;
 
-  ball.vx =
-    -direction * Math.max(170, Math.abs(ball.vx) * 0.5);
-
+  ball.vx = -direction * Math.max(170, Math.abs(ball.vx) * 0.5);
   ball.vy = -Math.max(200, Math.abs(ball.vy) * 0.35);
-
   ball.shotBySide = null;
   ball.pickupLockoutUntil = Date.now() + 180;
 
@@ -654,87 +603,62 @@ function handleBlocks(room) {
   });
 }
 
-// HARDER STEAL SYSTEM:
-// - Shift must be pressed, not continuously held.
-// - The defender must be within 48 pixels.
-// - Every attempt consumes a 1-second cooldown.
-// - Holding Shift cannot repeatedly trigger attempts.
-function handleSteals(room) {
+function attemptSteal(room, player, now = Date.now()) {
   const ball = room.ball;
-  const now = Date.now();
+  if (now - player.lastStealAt < STEAL_COOLDOWN_MS) return;
 
-  for (const player of room.players) {
-    const newlyPressed =
-      player.input.steal &&
-      !player.previousInput.steal;
+  const opponent = room.players.find(p => p.id !== player.id);
+  if (!opponent || opponent.stunnedUntil > now) return;
 
-    if (!newlyPressed) continue;
+  const distance = Math.hypot(player.x - opponent.x, player.y - opponent.y);
+  if (distance > STEAL_RANGE) return;
 
-    if (now - player.lastStealAt < STEAL_COOLDOWN_MS) {
-      continue;
-    }
+  // Only successful-range attempts consume the cooldown. The action is
+  // evaluated immediately on the Shift key-down packet, not on every tick.
+  player.lastStealAt = now;
 
-    const opponent = room.players.find(
-      p => p.id !== player.id
-    );
-
-    if (!opponent || opponent.stunnedUntil > now) {
-      continue;
-    }
-
-    // Consume the attempt even if the player is out of range.
-    player.lastStealAt = now;
-
-    const distance = Math.hypot(
-      player.x - opponent.x,
-      player.y - opponent.y
-    );
-
-    if (distance > STEAL_RANGE) continue;
-
-    if (ball.owner === opponent.id) {
-      ball.owner = player.id;
-
-      ball.vx = 0;
-      ball.vy = 0;
-
-      player.action = "steal";
-      player.actionUntil = now + 250;
-
-      io.to(room.code).emit("stolen", {
-        player: player.name
-      });
-    } else if (
-      ball.owner !== player.id &&
-      !ball.pendingScore
-    ) {
-      opponent.stunnedUntil = now + 1500;
-      opponent.vx = 0;
-      opponent.vy = 0;
-
-      opponent.action = "stunned";
-      opponent.actionUntil = now + 1500;
-
-      io.to(room.code).emit("stunned", {
-        player: opponent.name
-      });
-    }
+  if (ball.owner === opponent.id) {
+    ball.owner = player.id;
+    ball.vx = 0;
+    ball.vy = 0;
+    player.action = "steal";
+    player.actionUntil = now + 250;
+    io.to(room.code).emit("stolen", { player: player.name });
+  } else if (ball.owner !== player.id && !ball.pendingScore) {
+    opponent.stunnedUntil = now + 900;
+    opponent.vx = 0;
+    opponent.vy = 0;
+    opponent.action = "stunned";
+    opponent.actionUntil = now + 900;
+    io.to(room.code).emit("stunned", { player: opponent.name });
   }
+}
+
+function activateAbility(room, player, now = Date.now()) {
+  if (now < room.jumpBallStartsAt || now < player.abilityCooldownUntil || player.stunnedUntil > now) return false;
+
+  const character = characterFor(player);
+  player.abilityUntil = now + 4000;
+  player.abilityCooldownUntil = now + ABILITY_COOLDOWN_MS;
+
+  io.to(room.code).emit("abilityUsed", {
+    player: player.name,
+    character: character.name,
+    ability: character.ability,
+    side: player.side
+  });
+  return true;
 }
 
 function givePossession(room, player) {
   room.players.forEach(p => {
     p.x = p.side === 1 ? 240 : 960;
     p.y = COURT.floor;
-
     p.vx = 0;
     p.vy = 0;
-
     p.dunking = false;
     p.action = "idle";
-
     p.shootStartedAt = null;
-
     p.input.shoot = false;
     p.previousInput.shoot = false;
   });
@@ -750,10 +674,7 @@ function scoreBasket(room, scorer, points) {
 
   scorer.score += points;
 
-  const receiver = room.players.find(
-    p => p.id !== scorer.id
-  );
-
+  const receiver = room.players.find(p => p.id !== scorer.id);
   const hoopX = scorer.side === 1
     ? COURT.rightHoop
     : COURT.leftHoop;
@@ -762,12 +683,12 @@ function scoreBasket(room, scorer, points) {
   room.ball.owner = null;
   room.ball.shotBySide = null;
 
-  // Let the ball visibly fall through the net.
+  // Put the ball just above the rim, then let it visibly fall
+  // through the extended net before possession changes.
   room.ball.x = hoopX;
   room.ball.y = COURT.hoopY - 10;
   room.ball.vx = 0;
   room.ball.vy = 125;
-
   room.ball.previousX = hoopX;
   room.ball.previousY = room.ball.y;
 
@@ -811,8 +732,7 @@ function checkBasket(room) {
   );
 
   const crossingX =
-    ball.previousX +
-    (ball.x - ball.previousX) * fraction;
+    ball.previousX + (ball.x - ball.previousX) * fraction;
 
   let scorer = null;
 
@@ -861,7 +781,6 @@ function finishGame(room) {
   room.started = false;
 
   const [p1, p2] = room.players;
-
   const winner = p1.score === p2.score
     ? null
     : p1.score > p2.score
@@ -895,6 +814,7 @@ function updateGameClock(room, now) {
     return;
   }
 
+  // Tied games receive another full 15-second overtime.
   room.overtime += 1;
   room.periodEndsAt = now + OVERTIME_MS;
 
@@ -914,27 +834,18 @@ io.on("connection", socket => {
 
     const room = {
       code,
-
-      players: [
-        createPlayer(socket, name, 1)
-      ],
-
+      players: [createPlayer(socket, name, 1)],
       ball: createBall(),
-
       started: false,
       gameOver: false,
       overtime: 0,
-
       jumpBallStartsAt: null,
-      jumpBallTossStarted: false,
-
       periodEndsAt: 0,
       lastTick: Date.now(),
       snapshotCounter: 0
     };
 
     rooms.set(code, room);
-
     socket.join(code);
     socket.data.room = code;
 
@@ -954,40 +865,47 @@ io.on("connection", socket => {
     }
 
     if (room.players.length >= 2) {
-      return socket.emit(
-        "joinError",
-        "That room is full."
-      );
+      return socket.emit("joinError", "That room is full.");
     }
 
-    room.players.push(
-      createPlayer(socket, name, 2)
-    );
+    const player = createPlayer(socket, name, 2);
+    player.characterId = firstAvailableCharacter(room);
+    room.players.push(player);
 
     socket.join(code);
     socket.data.room = code;
 
-    io.to(code).emit(
-      "roomUpdate",
-      publicRoom(room)
+    io.to(code).emit("roomUpdate", publicRoom(room));
+    socket.emit("roomJoined", publicRoom(room, 2));
+  });
+
+  socket.on("selectCharacter", ({ characterId } = {}) => {
+    const room = rooms.get(socket.data.room);
+    if (!room || room.started) return;
+
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player || player.ready || !CHARACTERS[characterId]) return;
+
+    const takenByOpponent = room.players.some(
+      other => other.id !== player.id && other.characterId === characterId
     );
 
-    socket.emit(
-      "roomJoined",
-      publicRoom(room, 2)
-    );
+    if (takenByOpponent) {
+      socket.emit("characterSelectError", "That legend is already picked. Choose another.");
+      return;
+    }
+
+    player.characterId = characterId;
+    player.ready = false;
+    io.to(room.code).emit("roomUpdate", publicRoom(room));
   });
 
   socket.on("ready", () => {
     const room = rooms.get(socket.data.room);
-
     if (!room || room.started) return;
 
-    const player = room.players.find(
-      p => p.id === socket.id
-    );
-
-    if (!player) return;
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player || !CHARACTERS[player.characterId]) return;
 
     player.ready = true;
 
@@ -998,52 +916,35 @@ io.on("connection", socket => {
       startGame(room);
     }
 
-    io.to(room.code).emit(
-      "roomUpdate",
-      publicRoom(room)
-    );
+    io.to(room.code).emit("roomUpdate", publicRoom(room));
   });
 
-  // SERVER-AUTHORITATIVE DASH
   socket.on("dash", data => {
     const room = rooms.get(socket.data.room);
+    if (!room || !room.started || !room.jumpBallTossStarted) return;
 
-    if (!room || !room.started) return;
-
-    const now = Date.now();
-
-    if (now < room.jumpBallStartsAt) return;
-
-    const player = room.players.find(
-      p => p.id === socket.id
-    );
-
+    const player = room.players.find(p => p.id === socket.id);
     if (!player) return;
 
     const direction = Number(data?.direction);
+    const now = Date.now();
 
     if (direction !== -1 && direction !== 1) return;
 
     if (
       player.stunnedUntil > now ||
       player.dunking ||
-      player.action === "dunk"
+      now - player.lastDashAt < DASH_COOLDOWN_MS
     ) return;
-
-    if (now - player.lastDashAt < DASH_COOLDOWN_MS) {
-      return;
-    }
 
     player.lastDashAt = now;
     player.dashDirection = direction;
     player.dashUntil = now + DASH_DURATION_MS;
-
     player.vx = direction * DASH_SPEED;
   });
 
   socket.on("input", input => {
     const room = rooms.get(socket.data.room);
-
     if (!room || !room.started) return;
 
     const p = room.players.find(
@@ -1052,34 +953,37 @@ io.on("connection", socket => {
 
     if (!p) return;
 
+    const now = Date.now();
+    const countdown = !room.jumpBallTossStarted && now < room.jumpBallStartsAt;
+
     const next = {
       left: !!input.left,
       right: !!input.right,
       up: !!input.up,
-      shoot: !!input.shoot,
-      steal: !!input.steal,
-      pumpFake: !!input.pumpFake
+      shoot: countdown ? false : !!input.shoot,
+      steal: countdown ? false : !!input.steal,
+      pumpFake: countdown ? false : !!input.pumpFake,
+      ability: countdown ? false : !!input.ability
     };
 
-    const now = Date.now();
+    // Handle a steal immediately on the new Shift press. This avoids
+    // polling the steal action inside the 60 FPS physics loop.
+    if (next.steal && !p.input.steal) {
+      attemptSteal(room, p, now);
+    }
 
-    // Save movement and jump inputs during the countdown.
-    // Physics stays frozen until the toss starts.
-    if (now < room.jumpBallStartsAt) {
-      p.input = {
-        left: next.left,
-        right: next.right,
-        up: next.up,
+    // Character ability activates on E key-down.
+    if (next.ability && !p.input.ability) {
+      activateAbility(room, p, now);
+    }
 
-        shoot: false,
-        steal: false,
-        pumpFake: false
-      };
-
+    if (countdown) {
+      p.input = next;
       return;
     }
 
-    // Pump fake.
+    // Pump fake only works while holding the ball and not charging a shot.
+    // The edge check means holding the key does not repeatedly trigger it.
     if (
       next.pumpFake &&
       !p.input.pumpFake &&
@@ -1122,7 +1026,6 @@ io.on("connection", socket => {
 
   socket.on("disconnect", () => {
     const room = rooms.get(socket.data.room);
-
     if (!room) return;
 
     room.players = room.players.filter(
@@ -1134,12 +1037,10 @@ io.on("connection", socket => {
     } else {
       room.started = false;
       room.gameOver = false;
-
       room.players[0].ready = false;
       room.ball = createBall();
 
       io.to(room.code).emit("opponentLeft");
-
       io.to(room.code).emit(
         "roomUpdate",
         publicRoom(room)
@@ -1148,16 +1049,15 @@ io.on("connection", socket => {
   });
 });
 
-// 60 FPS physics, 30 FPS network snapshots.
+// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS
+// to reduce traffic while client-side interpolation stays smooth.
 setInterval(() => {
   const now = Date.now();
 
   for (const room of rooms.values()) {
-    if (!room.started || room.players.length !== 2) {
-      continue;
-    }
+    if (!room.started || room.players.length !== 2) continue;
 
-    // Freeze players and ball during countdown.
+    // Freeze physics during the countdown while preserving queued movement inputs.
     if (now < room.jumpBallStartsAt) {
       room.snapshotCounter += 1;
 
@@ -1169,19 +1069,14 @@ setInterval(() => {
       continue;
     }
 
-    // Toss ball upward exactly once.
     if (!room.jumpBallTossStarted) {
       room.jumpBallTossStarted = true;
-
       room.ball.vx = 0;
       room.ball.vy = -JUMP_BALL_TOSS_SPEED;
-      room.ball.owner = null;
-
       room.lastTick = now;
     }
 
     updateGameClock(room, now);
-
     if (!room.started) continue;
 
     const dt = Math.min(
@@ -1191,7 +1086,6 @@ setInterval(() => {
 
     room.lastTick = now;
 
-    // Move players as soon as the toss begins.
     for (const player of room.players) {
       movePlayer(player, dt);
     }
@@ -1225,19 +1119,13 @@ setInterval(() => {
 
       if (!room.ball.owner) {
         updateFreeBall(room.ball, dt);
-
         handleBlocks(room);
         checkBasket(room);
 
-        if (
-          !room.ball.pendingScore &&
-          !room.ball.owner
-        ) {
+        if (!room.ball.pendingScore && !room.ball.owner) {
           tryPickupBall(room);
         }
       }
-
-      handleSteals(room);
     }
 
     for (const p of room.players) {
