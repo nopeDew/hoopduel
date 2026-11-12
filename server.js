@@ -199,11 +199,12 @@ function publicRoom(room, mySide = null) {
   };
 }
 
+// Per-player packets keep the exact shot meter private to the shooter.
 function emitState(room, now = Date.now()) {
   const clock = getClock(room, now);
 
-  // Keep the meter at 0% during the tip-off countdown.
-  // Its 14-second recharge begins when the ball is tossed into play.
+  // Keep the meter at 0% during the tip-off countdown; its 14-second
+  // recharge begins when the ball is tossed into play.
   const abilityClockNow = Math.max(now, room.jumpBallStartsAt || now);
 
   for (const viewer of room.players) {
@@ -291,11 +292,12 @@ function startGame(room) {
     p.dashDirection = 0;
     p.abilityUntil = 0;
 
-    // Neither player starts with a ready ability.
-    // The cooldown starts when the jump ball begins.
+    // Start the recharge when the jump ball begins, not during the lobby
+    // or opening countdown. Neither player starts with a ready ability.
     p.abilityCooldownUntil = room.jumpBallStartsAt + ABILITY_COOLDOWN_MS;
   });
 
+  // The ball rises from center court when the countdown ends.
   room.ball = createBall();
   room.ball.x = 600;
   room.ball.y = 350;
@@ -311,6 +313,7 @@ function startGame(room) {
 function followHolder(ball, player) {
   const direction = player.side === 1 ? 1 : -1;
 
+  // Raise the ball during pump fakes and shot charging.
   if (player.action === "pumpFake" || player.shootStartedAt !== null) {
     ball.x = player.x + direction * 15;
     ball.y = player.y - 190;
@@ -453,17 +456,19 @@ function shootBall(room, p, heldMilliseconds) {
   const ball = room.ball;
   if (ball.owner !== p.id) return;
 
-  const direction = p.side === 1 ? 1 : -1;
   const hoopX = p.side === 1
     ? COURT.rightHoop
     : COURT.leftHoop;
 
+  // Aim toward the opponent's hoop, even if the player has crossed center court.
+  const direction = Math.sign(hoopX - p.x) || (p.side === 1 ? 1 : -1);
   const distance = Math.abs(hoopX - p.x);
   const airborne = p.y < COURT.floor - 24;
 
   const dieselActive = p.characterId === "shaq" && p.abilityUntil > Date.now();
   const dunkRange = 125 + (dieselActive ? 85 : 0);
 
+  // A close-range airborne shot becomes a dunk.
   if (distance < dunkRange && airborne) {
     p.dunking = true;
     p.action = "dunk";
@@ -508,7 +513,6 @@ function shootBall(room, p, heldMilliseconds) {
   );
 
   const defender = room.players.find(other => other.id !== p.id);
-
   const defenderDistance = defender
     ? Math.hypot(defender.x - p.x, defender.y - p.y)
     : 999;
@@ -522,37 +526,39 @@ function shootBall(room, p, heldMilliseconds) {
   );
 
   const points = distance >= THREE_POINT_DISTANCE ? 3 : 2;
-  const missRange = 125 * (1 - quality) + 4;
 
+  // Poorer timing/defense creates a wider left-right miss window.
+  // Keep the target close to the rim vertically so misses do not create wild arcs.
+  const missRange = 3 + 82 * (1 - quality);
   const targetX = hoopX + (Math.random() * 2 - 1) * missRange;
-  const targetY =
-    COURT.hoopY + (Math.random() * 2 - 1) * missRange * 0.45;
+  const targetY = COURT.hoopY;
 
+  // Release from in front of the player's body, then calculate one clean
+  // ballistic arc that reaches the target on its way down.
   ball.owner = null;
-  ball.x = p.x + direction * 30;
+  ball.x = p.x + direction * 24;
   ball.y = p.y - 68;
+  ball.previousX = ball.x;
+  ball.previousY = ball.y;
 
-  const horizontalDistance = Math.max(
-    70,
-    Math.abs(targetX - ball.x)
-  );
+  const horizontalDistance = targetX - ball.x;
+  const travelDistance = Math.abs(horizontalDistance);
 
-  const horizontalSpeed = clamp(
-    420 + horizontalDistance * 0.25,
-    430,
-    740
-  );
+  // Longer attempts get a higher arc. The chosen apex guarantees that the
+  // ball crosses the rim height while descending instead of using a forced
+  // vertical-speed cutoff that can distort the trajectory.
+  const arcHeight = clamp(45 + travelDistance * 0.11, 55, 160);
+  const apexY = targetY - arcHeight;
+  const rise = Math.max(1, ball.y - apexY);
+  const fall = Math.max(1, targetY - apexY);
 
-  const flightTime = horizontalDistance / horizontalSpeed;
-  const verticalDistance = targetY - ball.y;
+  const timeToApex = Math.sqrt((2 * rise) / BALL_GRAVITY);
+  const timeFromApex = Math.sqrt((2 * fall) / BALL_GRAVITY);
+  const flightTime = timeToApex + timeFromApex;
 
-  ball.vx = direction * horizontalSpeed;
-  ball.vy = (
-    verticalDistance -
-    0.5 * BALL_GRAVITY * flightTime * flightTime
-  ) / flightTime;
+  ball.vx = horizontalDistance / flightTime;
+  ball.vy = -Math.sqrt(2 * BALL_GRAVITY * rise);
 
-  ball.vy = Math.min(ball.vy, -270);
   ball.shotBySide = p.side;
   ball.shotPoints = points;
   ball.pickupLockoutUntil = Date.now() + 420;
@@ -625,13 +631,14 @@ function attemptSteal(room, player, now = Date.now()) {
 
   if (now - player.lastStealAt < STEAL_COOLDOWN_MS) return;
 
+  // Spend the attempt even when the defender presses too early or from too far away.
   player.lastStealAt = now;
 
   const horizontalDistance = Math.abs(player.x - opponent.x);
   const verticalDistance = Math.abs(player.y - opponent.y);
 
-  // With a loose ball, Shift briefly stuns a nearby opponent.
-  // It does not automatically steal or pick up the ball.
+  // When nobody has possession, Shift can briefly stun the nearby opponent.
+  // The ball stays loose; this does not turn into an automatic pickup or steal.
   if (!ball.owner) {
     if (
       horizontalDistance > LOOSE_BALL_STUN_RANGE ||
@@ -650,7 +657,7 @@ function attemptSteal(room, player, now = Date.now()) {
     return;
   }
 
-  // Normal steals only work against the opponent holding the ball.
+  // A normal steal only works against the opponent who is holding the ball.
   if (
     ball.owner !== opponent.id ||
     opponent.shootStartedAt !== null
@@ -668,11 +675,7 @@ function attemptSteal(room, player, now = Date.now()) {
 }
 
 function activateAbility(room, player, now = Date.now()) {
-  if (
-    now < room.jumpBallStartsAt ||
-    now < player.abilityCooldownUntil ||
-    player.stunnedUntil > now
-  ) return false;
+  if (now < room.jumpBallStartsAt || now < player.abilityCooldownUntil || player.stunnedUntil > now) return false;
 
   const character = characterFor(player);
   player.abilityUntil = now + 4000;
@@ -774,7 +777,6 @@ function checkBasket(room) {
 
   if (
     Math.abs(crossingX - COURT.rightHoop) < 24 &&
-    ball.vx > 0 &&
     ball.shotBySide === 1
   ) {
     scorer = room.players.find(p => p.side === 1);
@@ -782,7 +784,6 @@ function checkBasket(room) {
 
   if (
     Math.abs(crossingX - COURT.leftHoop) < 24 &&
-    ball.vx < 0 &&
     ball.shotBySide === 2
   ) {
     scorer = room.players.find(p => p.side === 2);
@@ -893,7 +894,10 @@ io.on("connection", socket => {
     const room = rooms.get(code);
 
     if (!room) {
-      return socket.emit("joinError", "Room not found. Check the code.");
+      return socket.emit(
+        "joinError",
+        "Room not found. Check the code."
+      );
     }
 
     if (room.players.length >= 2) {
@@ -1062,6 +1066,7 @@ io.on("connection", socket => {
   });
 });
 
+// Physics stays at 60 FPS. Network snapshots are sent at 30 FPS.
 setInterval(() => {
   const now = Date.now();
 
@@ -1142,7 +1147,9 @@ setInterval(() => {
         p.stunnedUntil <= now &&
         !p.dunking
       ) {
-        p.action = p.y < COURT.floor ? "jump" : "idle";
+        p.action = p.y < COURT.floor
+          ? "jump"
+          : "idle";
       }
 
       p.previousInput = { ...p.input };
